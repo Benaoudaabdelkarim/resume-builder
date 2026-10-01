@@ -5,13 +5,50 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
+const DATA_DIR = path.join(ROOT_DIR, 'data');
+const USERS_DIR = path.join(DATA_DIR, 'users');
 const APPLICATIONS_DIR = path.join(ROOT_DIR, 'applications');
 const PROFILE_FILE = path.join(ROOT_DIR, 'profile.md');
 const CONFIG_FILE = path.join(ROOT_DIR, '.env');
 
-// Ensure applications directory exists
+// Ensure base directories exist
 if (!fs.existsSync(APPLICATIONS_DIR)) {
   fs.mkdirSync(APPLICATIONS_DIR, { recursive: true });
+}
+if (!fs.existsSync(USERS_DIR)) {
+  fs.mkdirSync(USERS_DIR, { recursive: true });
+}
+
+/**
+ * Get user storage root directory.
+ */
+export function getUserDir(userId) {
+  if (!userId) return ROOT_DIR;
+  const dir = path.join(USERS_DIR, String(userId));
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+/**
+ * Get user applications directory.
+ */
+export function getUserApplicationsDir(userId) {
+  if (!userId) return APPLICATIONS_DIR;
+  const dir = path.join(getUserDir(userId), 'applications');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+/**
+ * Get user profile path.
+ */
+export function getUserProfilePath(userId) {
+  if (!userId) return PROFILE_FILE;
+  return path.join(getUserDir(userId), 'profile.md');
 }
 
 /**
@@ -114,8 +151,17 @@ export function coverLetterToText(cl) {
   if (!cl) return '';
   if (typeof cl === 'string') return cl;
 
+  const todayFormatted = new Date().toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const effectiveDate = (!cl.date || cl.date.includes('e.g.') || cl.date.toLowerCase().includes('current date'))
+    ? todayFormatted
+    : cl.date;
+
   let text = '';
-  if (cl.date) text += `${cl.date}\n\n`;
+  text += `${effectiveDate}\n\n`;
   if (cl.recipient) text += `${cl.recipient}\n`;
   if (cl.company) text += `${cl.company}\n\n`;
   if (cl.greeting) text += `${cl.greeting}\n\n`;
@@ -149,11 +195,12 @@ export async function saveApplicationBundle({
   resumePdfBase64 = null,
   resumeDocxBase64 = null,
   coverLetterPdfBase64 = null,
-}) {
+}, userId = null) {
+  const appsDir = getUserApplicationsDir(userId);
   const dateStr = new Date().toISOString().slice(0, 10);
   const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '');
   const folderName = `${dateStr}_${sanitizeName(companyName)}_${sanitizeName(roleTitle)}_${timeStr}`;
-  const targetDir = path.join(APPLICATIONS_DIR, folderName);
+  const targetDir = path.join(appsDir, folderName);
 
   fs.mkdirSync(targetDir, { recursive: true });
 
@@ -174,6 +221,15 @@ export async function saveApplicationBundle({
   fs.writeFileSync(path.join(targetDir, 'resume.md'), finalResumeMd, 'utf-8');
 
   // 4. Save Cover Letter TXT & JSON
+  if (coverLetterData && typeof coverLetterData === 'object') {
+    if (!coverLetterData.date || coverLetterData.date.includes('e.g.') || coverLetterData.date.toLowerCase().includes('current date')) {
+      coverLetterData.date = new Date().toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    }
+  }
   const finalCoverText = coverLetterText || coverLetterToText(coverLetterData);
   fs.writeFileSync(path.join(targetDir, 'cover_letter.json'), JSON.stringify(coverLetterData || {}, null, 2), 'utf-8');
   fs.writeFileSync(path.join(targetDir, 'cover_letter.txt'), finalCoverText, 'utf-8');
@@ -212,16 +268,17 @@ export async function saveApplicationBundle({
 }
 
 /**
- * List all saved applications.
+ * List all saved applications for a user.
  */
-export function listApplications() {
-  if (!fs.existsSync(APPLICATIONS_DIR)) return [];
-  const entries = fs.readdirSync(APPLICATIONS_DIR, { withFileTypes: true });
+export function listApplications(userId = null) {
+  const appsDir = getUserApplicationsDir(userId);
+  if (!fs.existsSync(appsDir)) return [];
+  const entries = fs.readdirSync(appsDir, { withFileTypes: true });
 
   const list = [];
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      const dirPath = path.join(APPLICATIONS_DIR, entry.name);
+      const dirPath = path.join(appsDir, entry.name);
       const metaPath = path.join(dirPath, 'metadata.json');
 
       if (fs.existsSync(metaPath)) {
@@ -242,11 +299,12 @@ export function listApplications() {
 }
 
 /**
- * Get all files from a specific saved application.
+ * Get all files from a specific saved application for a user.
  */
-export function getApplication(folderName) {
+export function getApplication(folderName, userId = null) {
+  const appsDir = getUserApplicationsDir(userId);
   const safeFolder = path.basename(folderName);
-  const targetDir = path.join(APPLICATIONS_DIR, safeFolder);
+  const targetDir = path.join(appsDir, safeFolder);
   if (!fs.existsSync(targetDir)) return null;
 
   const readSafe = (file) => {
@@ -279,20 +337,41 @@ export function getApplication(folderName) {
 }
 
 /**
- * Read base profile.md
+ * Get file path within an application bundle.
  */
-export function getProfile() {
-  if (fs.existsSync(PROFILE_FILE)) {
-    return fs.readFileSync(PROFILE_FILE, 'utf-8');
+export function getApplicationFilePath(folderName, fileName, userId = null) {
+  const appsDir = getUserApplicationsDir(userId);
+  const safeFolder = path.basename(folderName);
+  const safeFile = path.basename(fileName);
+  const filePath = path.join(appsDir, safeFolder, safeFile);
+  if (fs.existsSync(filePath)) {
+    return filePath;
+  }
+  return null;
+}
+
+/**
+ * Read user profile.md (strictly returns user's file or empty string if not yet created).
+ */
+export function getProfile(userId = null) {
+  if (!userId) return '';
+  const userProfilePath = getUserProfilePath(userId);
+  if (fs.existsSync(userProfilePath)) {
+    return fs.readFileSync(userProfilePath, 'utf-8');
   }
   return '';
 }
 
 /**
- * Save updated base profile.md
+ * Save updated user profile.md
  */
-export function saveProfile(content) {
-  fs.writeFileSync(PROFILE_FILE, content, 'utf-8');
+export function saveProfile(content, userId = null) {
+  const userProfilePath = getUserProfilePath(userId);
+  const dir = path.dirname(userProfilePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(userProfilePath, content, 'utf-8');
   return true;
 }
 

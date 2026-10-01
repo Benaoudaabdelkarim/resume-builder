@@ -1,11 +1,19 @@
-import React, { useState } from 'react';
-import { X, Key, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
-import { saveApiKey } from '../utils/api';
+import React, { useState, useEffect } from 'react';
+import { X, Key, CheckCircle2, AlertCircle, ExternalLink, Trash2 } from 'lucide-react';
+import { saveApiKey, getStoredApiKey, removeStoredApiKey } from '../utils/api';
 
 export default function ApiKeyModal({ isOpen, onClose, onKeySaved }) {
   const [keyInput, setKeyInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null); // { type: 'success'|'error', message }
+
+  useEffect(() => {
+    if (isOpen) {
+      const stored = getStoredApiKey();
+      setKeyInput(stored);
+      setStatus(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -20,18 +28,24 @@ export default function ApiKeyModal({ isOpen, onClose, onKeySaved }) {
     setStatus(null);
     try {
       const res = await saveApiKey(keyInput.trim());
-      setStatus({ type: 'success', message: res.message || 'Key verified and saved!' });
-      onKeySaved();
+      setStatus({ type: 'success', message: res.message || 'Key verified and stored in localStorage!' });
+      if (onKeySaved) onKeySaved();
       setTimeout(() => {
         onClose();
         setStatus(null);
-        setKeyInput('');
-      }, 1200);
+      }, 1000);
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Failed to verify API key' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClear = () => {
+    removeStoredApiKey();
+    setKeyInput('');
+    setStatus({ type: 'success', message: 'API Key removed from browser localStorage.' });
+    if (onKeySaved) onKeySaved();
   };
 
   return (
@@ -54,7 +68,7 @@ export default function ApiKeyModal({ isOpen, onClose, onKeySaved }) {
 
         <form onSubmit={handleSave} className="p-5 space-y-4">
           <p className="text-xs text-slate-600 leading-relaxed">
-            Your key is stored permanently in <code className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded font-mono">.env</code> on your local disk. Once saved, it will automatically load every time you launch the studio.
+            Your key is stored securely in your browser's <code className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded font-mono">localStorage</code>. It stays strictly on your machine and is never shared or stored on external servers.
           </p>
 
           <div>
@@ -80,6 +94,17 @@ export default function ApiKeyModal({ isOpen, onClose, onKeySaved }) {
               <span>Get a free Gemini API key</span>
               <ExternalLink className="w-3 h-3" />
             </a>
+
+            {getStoredApiKey() && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="flex items-center space-x-1 text-rose-600 hover:underline font-medium cursor-pointer"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Remove Key</span>
+              </button>
+            )}
           </div>
 
           {status && (
@@ -110,9 +135,9 @@ export default function ApiKeyModal({ isOpen, onClose, onKeySaved }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition disabled:opacity-50"
+              className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Verifying Key...' : 'Verify & Save to .env'}
+              {loading ? 'Verifying Key...' : 'Verify & Save to LocalStorage'}
             </button>
           </div>
         </form>

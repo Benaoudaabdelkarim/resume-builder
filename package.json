@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:server": "node --watch server/index.js",
+    "dev:server": "node --watch --watch-path=server server/index.js",
     "dev:client": "vite",
     "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT\" -c \"cyan.bold,green.bold\" \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",

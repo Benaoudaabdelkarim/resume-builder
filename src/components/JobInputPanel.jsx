@@ -117,12 +117,15 @@ export default function JobInputPanel({
         <select
           value={modelName}
           onChange={(e) => setModelName(e.target.value)}
-          className="bg-slate-50 text-slate-800 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500"
+          className="bg-slate-50 text-slate-800 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer"
         >
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommended)</option>
-          <option value="gemini-flash-latest">Gemini Flash Latest</option>
-          <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep)</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
           <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
+          <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
+          <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
         </select>
       </div>
 

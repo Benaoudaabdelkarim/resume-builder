@@ -67,18 +67,13 @@ export async function generateAtsApplication({
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  const candidateModels = [
-    modelName,
-    'gemini-2.5-flash',
-    'gemini-flash-latest',
-    'gemini-2.5-pro',
-    'gemini-pro-latest',
-    'gemini-2.5-flash-lite',
-    'gemini-3.8-flash',
-  ].filter(Boolean);
+  const selectedModel = modelName || 'gemini-2.5-flash';
 
-  // Remove duplicates
-  const uniqueModels = [...new Set(candidateModels)];
+  const todayFormatted = new Date().toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   const prompt = `
 You are an expert Executive Resume Writer and Applicant Tracking System (ATS) optimization specialist.
@@ -184,7 +179,7 @@ Return ONLY valid JSON matching this schema:
   "coverLetter": {
     "recipient": "Hiring Team or Hiring Manager",
     "company": "Company Name",
-    "date": "Current Date (e.g. September 25, 2026)",
+    "date": "${todayFormatted}",
     "greeting": "Dear Hiring Team,",
     "bodyParagraphs": [
       "Opening paragraph...",
@@ -198,41 +193,31 @@ Return ONLY valid JSON matching this schema:
 }
 `;
 
-  let lastError = null;
-  for (const candidate of uniqueModels) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: candidate,
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json',
-        },
-      });
+  const model = genAI.getGenerativeModel({
+    model: selectedModel,
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+    },
+  });
 
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
+  const result = await model.generateContent(prompt);
+  const responseText = result.response.text();
 
-      let parsed;
-      try {
-        parsed = JSON.parse(responseText);
-      } catch (err) {
-        const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-        parsed = JSON.parse(cleaned);
-      }
-      return sanitizeData(parsed);
-    } catch (err) {
-      console.warn(`Model ${candidate} failed: ${err.message}. Trying next available model...`);
-      lastError = err;
-      // If error is 404 or model not supported, continue to next model
-      if (err.message?.includes('404') || err.message?.includes('not found') || err.message?.includes('not supported')) {
-        continue;
-      }
-      // If error is something else like invalid key or quota, throw it
-      throw err;
-    }
+  let parsed;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch (err) {
+    const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    parsed = JSON.parse(cleaned);
   }
 
-  throw lastError || new Error('All candidate models failed to generate content.');
+  // Always guarantee the cover letter date is today's current date
+  if (parsed && parsed.coverLetter) {
+    parsed.coverLetter.date = todayFormatted;
+  }
+
+  return sanitizeData(parsed);
 }
 
 /**

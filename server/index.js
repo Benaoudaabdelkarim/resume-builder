@@ -14,8 +14,17 @@ import {
   saveApplicationBundle,
   listApplications,
   getApplication,
+  getApplicationFilePath,
   resumeJsonToMarkdown,
 } from './storage.js';
+import {
+  createUser,
+  authenticateUser,
+  createSession,
+  getUserBySession,
+  deleteSession,
+} from './db.js';
+import { authMiddleware, optionalAuthMiddleware } from './auth.js';
 
 dotenv.config();
 
@@ -33,19 +42,107 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Health / Status check
-app.get('/api/status', (req, res) => {
-  const key = getStoredApiKey();
-  const profile = getProfile();
+app.get('/api/status', optionalAuthMiddleware, (req, res) => {
+  const profile = getProfile(req.userId);
   res.json({
     status: 'online',
-    hasKey: Boolean(key),
-    maskedKey: key ? `${key.slice(0, 4)}...${key.slice(-4)}` : null,
     hasProfile: Boolean(profile && profile.trim().length > 0),
-    profileLength: profile.length,
+    profileLength: profile ? profile.length : 0,
+    user: req.user || null,
   });
 });
 
-// Test and save API Key
+// Auth: Register with Name, Email, Password
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required.' });
+    }
+    if (typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({ error: 'Please enter a valid name (at least 2 characters).' });
+    }
+    if (typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+    if (typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+
+    const user = createUser(name.trim(), email.trim(), password);
+    const session = createSession(user.id);
+    res.json({
+      success: true,
+      token: session.token,
+      user,
+    });
+  } catch (err) {
+    if (err.message && (err.message.includes('already exists') || err.message.includes('already registered'))) {
+      return res.status(409).json({ error: err.message });
+    }
+    res.status(500).json({ error: err.message || 'Registration failed' });
+  }
+});
+
+// Auth: Login with Email & Password
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
+
+    const user = authenticateUser(email.trim(), password);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const session = createSession(user.id);
+    res.json({
+      success: true,
+      token: session.token,
+      user,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Login failed' });
+  }
+});
+
+// Auth: Current logged in user info
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// Auth: Logout
+app.post('/api/auth/logout', authMiddleware, (req, res) => {
+  try {
+    deleteSession(req.token);
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Test Gemini API Key (validates key without altering server-side .env)
+app.post('/api/test-key', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey) {
+      return res.status(400).json({ error: 'API key is required' });
+    }
+
+    const testResult = await testGeminiKey(apiKey);
+    if (!testResult.success) {
+      return res.status(400).json({ error: `API Key test failed: ${testResult.error}` });
+    }
+
+    res.json({ success: true, message: 'Gemini API Key is valid and working!' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Legacy/Compatibility API Key endpoint
 app.post('/api/api-key', async (req, res) => {
   try {
     const { apiKey } = req.body;
@@ -203,6 +300,47 @@ app.post('/api/fetch-job-url', async (req, res) => {
 
     const html = await response.text();
 
+    // 5. Check for Schema.org JobPosting JSON-LD (used by RBC, Phenom, Workday, Taleo, etc.)
+    const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+    for (const m of jsonLdMatches) {
+      try {
+        const parsed = JSON.parse(m[1]);
+        if (parsed && (parsed['@type'] === 'JobPosting' || parsed.title)) {
+          const jobTitle = parsed.title || '';
+          const companyName = parsed.hiringOrganization?.name || '';
+          const rawDesc = parsed.description || '';
+
+          let cleanDesc = rawDesc
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/<br\s*[\/]?>/gi, '\n')
+            .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n')
+            .replace(/<li[^>]*>/gi, '• ')
+            .replace(/<[^>]+>/g, ' ');
+
+          const lines = cleanDesc
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0);
+
+          const fullText = lines.join('\n');
+          if (fullText.length > 80) {
+            return res.json({
+              success: true,
+              url,
+              title: jobTitle,
+              company: companyName,
+              text: fullText.slice(0, 20000),
+            });
+          }
+        }
+      } catch {}
+    }
+
     // Extract title
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     const title = titleMatch ? titleMatch[1].trim() : '';
@@ -288,22 +426,22 @@ app.get('/api/clip-job', (req, res) => {
 });
 
 // Profile endpoints
-app.get('/api/profile', (req, res) => {
+app.get('/api/profile', authMiddleware, (req, res) => {
   try {
-    const content = getProfile();
+    const content = getProfile(req.userId);
     res.json({ content });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/profile', (req, res) => {
+app.post('/api/profile', authMiddleware, (req, res) => {
   try {
     const { content } = req.body;
     if (typeof content !== 'string') {
       return res.status(400).json({ error: 'Profile content must be a string' });
     }
-    saveProfile(content);
+    saveProfile(content, req.userId);
     res.json({ success: true, message: 'Profile saved successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -311,11 +449,11 @@ app.post('/api/profile', (req, res) => {
 });
 
 // Generate Tailored Application
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', optionalAuthMiddleware, async (req, res) => {
   try {
     const {
       apiKey: customKey,
-      modelName = 'gemini-1.5-flash',
+      modelName = 'gemini-2.5-flash',
       profileMd: customProfile,
       jobPost,
       companyName,
@@ -330,7 +468,7 @@ app.post('/api/generate', async (req, res) => {
       });
     }
 
-    const profileMd = customProfile || getProfile();
+    const profileMd = customProfile || getProfile(req.userId);
     if (!profileMd || !profileMd.trim()) {
       return res.status(400).json({
         error: 'Base profile is empty. Please provide your base resume markdown in the profile tab.',
@@ -355,6 +493,14 @@ app.post('/api/generate', async (req, res) => {
       result.resumeMarkdown = resumeJsonToMarkdown(result.resume);
     }
 
+    if (result && result.coverLetter) {
+      result.coverLetter.date = new Date().toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    }
+
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error generating application:', error);
@@ -363,9 +509,9 @@ app.post('/api/generate', async (req, res) => {
 });
 
 // Save Application Bundle
-app.post('/api/save-bundle', async (req, res) => {
+app.post('/api/save-bundle', authMiddleware, async (req, res) => {
   try {
-    const result = await saveApplicationBundle(req.body);
+    const result = await saveApplicationBundle(req.body, req.userId);
     res.json(result);
   } catch (error) {
     console.error('Error saving bundle:', error);
@@ -374,9 +520,9 @@ app.post('/api/save-bundle', async (req, res) => {
 });
 
 // List saved applications
-app.get('/api/applications', (req, res) => {
+app.get('/api/applications', authMiddleware, (req, res) => {
   try {
-    const list = listApplications();
+    const list = listApplications(req.userId);
     res.json({ applications: list });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -384,9 +530,9 @@ app.get('/api/applications', (req, res) => {
 });
 
 // Get a specific application bundle
-app.get('/api/applications/:folderName', (req, res) => {
+app.get('/api/applications/:folderName', authMiddleware, (req, res) => {
   try {
-    const data = getApplication(req.params.folderName);
+    const data = getApplication(req.params.folderName, req.userId);
     if (!data) {
       return res.status(404).json({ error: 'Application not found' });
     }
@@ -397,13 +543,10 @@ app.get('/api/applications/:folderName', (req, res) => {
 });
 
 // Serve a specific file from a bundle (e.g. resume.pdf)
-app.get('/api/applications/:folderName/file/:fileName', (req, res) => {
+app.get('/api/applications/:folderName/file/:fileName', optionalAuthMiddleware, (req, res) => {
   try {
-    const safeFolder = path.basename(req.params.folderName);
-    const safeFile = path.basename(req.params.fileName);
-    const filePath = path.join(APPLICATIONS_DIR, safeFolder, safeFile);
-
-    if (!fs.existsSync(filePath)) {
+    const filePath = getApplicationFilePath(req.params.folderName, req.params.fileName, req.userId);
+    if (!filePath || !fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
 

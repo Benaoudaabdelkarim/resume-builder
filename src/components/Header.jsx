@@ -1,7 +1,10 @@
 import React from 'react';
-import { Key, UserCheck, History, Sparkles, FolderArchive, Layers } from 'lucide-react';
+import { Key, UserCheck, FolderArchive, Layers, User, LogOut, LogIn } from 'lucide-react';
 
 export default function Header({
+  user,
+  onOpenAuthModal,
+  onLogout,
   hasKey,
   maskedKey,
   onOpenApiKeyModal,
@@ -31,35 +34,39 @@ export default function Header({
       </div>
 
       {/* Actions / Status badges */}
-      <div className="flex items-center space-x-2 sm:space-x-3">
+      <div className="flex items-center flex-wrap gap-2 sm:gap-3">
         {/* Gemini API Key */}
         <button
           onClick={onOpenApiKeyModal}
-          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
             hasKey
               ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
               : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 animate-pulse'
           }`}
-          title="Gemini API Key is securely stored in .env on your computer"
+          title="Gemini API Key is securely stored in your browser's localStorage"
         >
           <Key className="w-3.5 h-3.5 text-emerald-600" />
-          <span>{hasKey ? `Gemini Key (.env Active)` : 'Connect Gemini Key'}</span>
+          <span>{hasKey ? 'Gemini Key (LocalStorage Active)' : 'Connect Gemini Key'}</span>
         </button>
 
         {/* Profile Markdown */}
         <button
           onClick={onOpenProfileModal}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 transition"
-          title="Master career profile is stored permanently in profile.md"
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+            hasProfile
+              ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200'
+              : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+          }`}
+          title="Career profile is stored in profile.md for your account"
         >
-          <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-          <span>{hasProfile ? 'Base Profile (profile.md Stored)' : 'Base Profile (MD)'}</span>
+          <UserCheck className={`w-3.5 h-3.5 ${hasProfile ? 'text-blue-600' : 'text-amber-600'}`} />
+          <span>{hasProfile ? 'Base Profile (Ready)' : 'Add Base Profile (.md)'}</span>
         </button>
 
         {/* Saved Applications History */}
         <button
           onClick={onOpenHistory}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
         >
           <FolderArchive className="w-3.5 h-3.5 text-indigo-600" />
           <span>Applications</span>
@@ -69,6 +76,35 @@ export default function Header({
             </span>
           )}
         </button>
+
+        {/* User Account / Auth Section */}
+        {user ? (
+          <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
+            <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px]">
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <span className="font-semibold text-slate-800 max-w-[120px] truncate" title={user.email}>
+                {user.name}
+              </span>
+            </div>
+            <button
+              onClick={onLogout}
+              title="Sign Out"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onOpenAuthModal}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition cursor-pointer"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Sign In / Register</span>
+          </button>
+        )}
       </div>
     </header>
   );

@@ -19,6 +19,7 @@ build/
 # Local User Data & Applications
 profile.md
 applications/
+data/
 
 # Logs & Debug
 logs

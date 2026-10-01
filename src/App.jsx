@@ -6,6 +6,7 @@ import CoverLetterPreview from './components/CoverLetterPreview';
 import ApiKeyModal from './components/ApiKeyModal';
 import ProfileModal from './components/ProfileModal';
 import HistoryDrawer from './components/HistoryDrawer';
+import AuthModal from './components/AuthModal';
 
 import {
   fetchStatus,
@@ -13,6 +14,9 @@ import {
   saveBundle,
   fetchApplications,
   checkClippedJob,
+  fetchCurrentUser,
+  logout,
+  getStoredApiKey,
 } from './utils/api';
 import { getElementPdfBase64 } from './utils/pdfGenerator';
 import { resumeJsonToMarkdown } from './utils/markdownFormatter';
@@ -20,6 +24,10 @@ import { getResumeDocxBase64 } from './utils/docxGenerator';
 import { FileText, Mail, Sparkles } from 'lucide-react';
 
 export default function App() {
+  // Auth state
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
   // App system status
   const [hasKey, setHasKey] = useState(false);
   const [maskedKey, setMaskedKey] = useState(null);
@@ -53,10 +61,10 @@ export default function App() {
   const [matchScore, setMatchScore] = useState(null);
   const [matchedKeywords, setMatchedKeywords] = useState([]);
 
-  // Check initial system status and listen for clipped jobs from browser bookmarklet
+  // Check initial user, system status, and listen for clipped jobs
   useEffect(() => {
-    refreshStatus();
-    refreshHistory();
+    refreshKeyStatus();
+    initAuthAndStatus();
 
     const clipInterval = setInterval(async () => {
       try {
@@ -75,12 +83,47 @@ export default function App() {
     return () => clearInterval(clipInterval);
   }, []);
 
+  const refreshKeyStatus = () => {
+    const key = getStoredApiKey();
+    setHasKey(Boolean(key));
+    setMaskedKey(key ? `${key.slice(0, 4)}...${key.slice(-4)}` : null);
+  };
+
+  const initAuthAndStatus = async () => {
+    try {
+      const user = await fetchCurrentUser();
+      if (user) {
+        setCurrentUser(user);
+        await refreshStatus();
+        await refreshHistory();
+      } else {
+        // Prompt login if no user session is found
+        setIsAuthModalOpen(true);
+      }
+    } catch {
+      setIsAuthModalOpen(true);
+    }
+  };
+
+  const handleAuthSuccess = (user) => {
+    setCurrentUser(user);
+    refreshStatus();
+    refreshHistory();
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setCurrentUser(null);
+    setHistoryCount(0);
+    setHasProfile(false);
+    setIsAuthModalOpen(true);
+  };
+
   const refreshStatus = async () => {
     try {
       const status = await fetchStatus();
-      setHasKey(status.hasKey);
-      setMaskedKey(status.maskedKey);
       setHasProfile(status.hasProfile);
+      refreshKeyStatus();
     } catch (err) {
       console.error('Failed to get status:', err);
     }
@@ -97,6 +140,16 @@ export default function App() {
 
   // Generate ATS Application using Gemini
   const handleGenerate = async () => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    if (!hasProfile) {
+      setIsProfileModalOpen(true);
+      return;
+    }
+
     if (!hasKey) {
       setIsApiKeyModalOpen(true);
       return;
@@ -115,6 +168,13 @@ export default function App() {
       });
 
       const { data } = res;
+      if (data.coverLetter) {
+        data.coverLetter.date = new Date().toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        });
+      }
       setResumeData(data.resume);
       setCoverLetterData(data.coverLetter);
       setMatchScore(data.atsMatchScoreEstimate || 95);
@@ -139,6 +199,10 @@ export default function App() {
 
   // Save the complete bundle locally
   const handleSaveBundle = async () => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     if (!resumeData && !coverLetterData) return;
 
     setIsSaving(true);
@@ -218,6 +282,9 @@ export default function App() {
     <div className="flex flex-col h-screen overflow-hidden bg-slate-100 text-slate-900 font-sans">
       {/* App Header */}
       <Header
+        user={currentUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
         hasKey={hasKey}
         maskedKey={maskedKey}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
@@ -320,10 +387,16 @@ export default function App() {
       </div>
 
       {/* Modals & Drawers */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
+
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
-        onKeySaved={refreshStatus}
+        onKeySaved={refreshKeyStatus}
       />
 
       <ProfileModal

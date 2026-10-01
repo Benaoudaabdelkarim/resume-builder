@@ -24,27 +24,43 @@ export default function CoverLetterPreview({
     );
   }
 
+  const todayFormatted = new Date().toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
   const {
     recipient = 'Hiring Team',
     company = companyName || 'Company',
-    date = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    date = todayFormatted,
     greeting = 'Dear Hiring Team,',
     bodyParagraphs = [],
     signOff = 'Sincerely,',
     senderName = candidateName || 'Candidate',
   } = coverLetterData;
 
+  // Always ensure date is today's current date unless explicitly edited
+  const activeDate = (!date || date.includes('e.g.') || date.toLowerCase().includes('current date'))
+    ? todayFormatted
+    : date;
+
   const handleParagraphChange = (idx, value) => {
     if (!onUpdateCoverLetter) return;
-    const updated = { ...coverLetterData };
+    const updated = { ...coverLetterData, date: activeDate };
     const paragraphs = [...(updated.bodyParagraphs || [])];
     paragraphs[idx] = value;
     updated.bodyParagraphs = paragraphs;
     onUpdateCoverLetter(updated);
   };
 
+  const handleDateChange = (newDate) => {
+    if (!onUpdateCoverLetter) return;
+    onUpdateCoverLetter({ ...coverLetterData, date: newDate });
+  };
+
   const getFullText = () => {
-    return `${date}\n\n${recipient}\n${company}\n\n${greeting}\n\n${(bodyParagraphs || []).join('\n\n')}\n\n${signOff}\n${senderName}`;
+    return `${activeDate}\n\n${recipient}\n${company}\n\n${greeting}\n\n${(bodyParagraphs || []).join('\n\n')}\n\n${signOff}\n${senderName}`;
   };
 
   const handleCopy = () => {
@@ -144,7 +160,16 @@ export default function CoverLetterPreview({
           </div>
 
           <div className="text-sm text-gray-700 mb-6 space-y-1">
-            <p>{date}</p>
+            {isEditing ? (
+              <input
+                type="text"
+                value={activeDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="text-sm text-gray-800 border border-blue-300 rounded px-2 py-0.5 focus:outline-none w-48 font-medium"
+              />
+            ) : (
+              <p>{activeDate}</p>
+            )}
             <p className="font-semibold text-gray-900 mt-4">{recipient}</p>
             <p>{company}</p>
           </div>
