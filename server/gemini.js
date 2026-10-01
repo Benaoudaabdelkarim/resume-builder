@@ -125,9 +125,9 @@ Return ONLY valid JSON matching this schema:
       "email": "email",
       "phone": "phone",
       "location": "City, State/Country",
-      "linkedin": "linkedin url or username",
-      "github": "github url or username",
-      "portfolio": "portfolio or website url"
+      "linkedin": "candidate's LinkedIn profile URL or username (or null if not provided)",
+      "github": "candidate's actual GitHub profile URL (or null if not provided; NEVER repeat portfolio or website URL here)",
+      "portfolio": "candidate's personal portfolio or website URL"
     },
     "summary": "Punchy, high-impact professional summary strictly MAXIMUM 3 LINES (under 50 words) loaded with job-relevant keywords.",
     "skills": [
@@ -169,7 +169,6 @@ Return ONLY valid JSON matching this schema:
       {
         "name": "Project Name",
         "technologies": "React, Node.js, AWS",
-        "link": "optional url",
         "bullets": [
           "Key achievement or technical detail regarding this project."
         ]
@@ -285,6 +284,33 @@ Return ONLY valid JSON matching this schema:
   // Always guarantee the cover letter date is today's current date
   if (parsed && parsed.coverLetter) {
     parsed.coverLetter.date = todayFormatted;
+  }
+
+  // Deduplicate and validate personalInfo URLs
+  if (parsed.resume && parsed.resume.personalInfo) {
+    const info = parsed.resume.personalInfo;
+    const cleanUrl = (url) => (url || '').trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+    const portfolioClean = cleanUrl(info.portfolio || info.website);
+    const githubClean = cleanUrl(info.github);
+
+    // If github field repeats portfolio/website or is not actually GitHub
+    if (githubClean && portfolioClean && githubClean === portfolioClean) {
+      info.github = '';
+    } else if (info.github && !info.github.toLowerCase().includes('github.com')) {
+      if (!info.portfolio) {
+        info.portfolio = info.github;
+      }
+      info.github = '';
+    }
+  }
+
+  // Remove website and link from key projects
+  if (Array.isArray(parsed?.resume?.projects)) {
+    parsed.resume.projects.forEach((proj) => {
+      delete proj.link;
+      delete proj.website;
+      delete proj.url;
+    });
   }
 
   parsed.modelUsed = activeModelUsed;

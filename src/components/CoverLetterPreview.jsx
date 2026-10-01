@@ -139,7 +139,8 @@ export default function CoverLetterPreview({
           <Button
             variant="secondary"
             size="sm"
-            onClick={triggerPrint}
+            onClick={() => triggerPrint('cover-letter-document', `${candidateName || 'Cover Letter'} - ${company}`)}
+            title="Print or Save as Vector PDF with browser dialog"
           >
             <Printer className="w-3.5 h-3.5 text-slate-600" />
             <span>Print</span>

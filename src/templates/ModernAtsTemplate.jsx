@@ -85,36 +85,35 @@ export default function ModernAtsTemplate({ resume, isEditing, onUpdate }) {
           {personalInfo.location && (
             <span className="text-gray-700">{personalInfo.location}</span>
           )}
-          {personalInfo.portfolio && (
-            <a
-              href={personalInfo.portfolio.startsWith('http') ? personalInfo.portfolio : `https://${personalInfo.portfolio}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              {personalInfo.portfolio.startsWith('http') ? personalInfo.portfolio : `https://${personalInfo.portfolio}`}
-            </a>
-          )}
-          {personalInfo.linkedin && (
-            <a
-              href={personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              {personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`}
-            </a>
-          )}
-          {personalInfo.github && (
-            <a
-              href={personalInfo.github.startsWith('http') ? personalInfo.github : `https://${personalInfo.github}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              {personalInfo.github.startsWith('http') ? personalInfo.github : `https://${personalInfo.github}`}
-            </a>
-          )}
+          {(() => {
+            const seen = new Set();
+            const links = [];
+            const addLink = (rawUrl, isGit = false) => {
+              if (!rawUrl || typeof rawUrl !== 'string') return;
+              const clean = rawUrl.trim();
+              const norm = clean.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+              if (isGit && !norm.includes('github') && seen.has(norm)) return;
+              if (!seen.has(norm)) {
+                seen.add(norm);
+                const href = clean.startsWith('http') ? clean : `https://${clean}`;
+                links.push(
+                  <a
+                    key={norm}
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {clean}
+                  </a>
+                );
+              }
+            };
+            addLink(personalInfo.portfolio);
+            addLink(personalInfo.linkedin);
+            addLink(personalInfo.github, true);
+            return links;
+          })()}
         </div>
       </header>
 
@@ -227,16 +226,6 @@ export default function ModernAtsTemplate({ resume, isEditing, onUpdate }) {
                   <span className="font-bold text-gray-900">
                     {cleanText(proj.name)}
                   </span>
-                  {proj.link && (
-                    <a
-                      href={proj.link.startsWith('http') ? proj.link : `https://${proj.link}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      {proj.link}
-                    </a>
-                  )}
                 </div>
                 {proj.technologies && (
                   <div className="text-xs font-normal text-gray-600 mt-0.5 italic">

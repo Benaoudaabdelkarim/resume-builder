@@ -285,22 +285,6 @@ export function generateResumeDocx(resumeData) {
         })
       );
 
-      if (proj.link) {
-        children.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: cleanText(proj.link),
-                size: 20,
-                font: 'Calibri',
-                color: '2563EB', // blue
-              }),
-            ],
-            spacing: { before: 0, after: 40 },
-          })
-        );
-      }
-
       if (Array.isArray(proj.bullets)) {
         proj.bullets.forEach((b) => {
           if (b && b.trim()) {

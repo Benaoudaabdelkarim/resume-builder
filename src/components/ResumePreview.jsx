@@ -165,7 +165,7 @@ export default function ResumePreview({
           <Button
             variant="secondary"
             size="sm"
-            onClick={triggerPrint}
+            onClick={() => triggerPrint('resume-document', `${resumeData?.personalInfo?.fullName || 'Resume'} - ATS`)}
             title="Print or Save as Vector PDF with browser dialog"
           >
             <Printer className="w-3.5 h-3.5 text-slate-600" />

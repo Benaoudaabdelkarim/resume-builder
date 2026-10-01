@@ -41,16 +41,29 @@ export default function MinimalTechTemplate({ resume, isEditing, onUpdate }) {
           )}
           {personalInfo.phone && <span className="italic text-slate-700">{personalInfo.phone}</span>}
           {personalInfo.location && <span className="text-slate-700">{personalInfo.location}</span>}
-          {personalInfo.portfolio && (
-            <a href={personalInfo.portfolio.startsWith('http') ? personalInfo.portfolio : `https://${personalInfo.portfolio}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-              {personalInfo.portfolio}
-            </a>
-          )}
-          {personalInfo.github && (
-            <a href={personalInfo.github.startsWith('http') ? personalInfo.github : `https://${personalInfo.github}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-              {personalInfo.github}
-            </a>
-          )}
+          {(() => {
+            const seen = new Set();
+            const links = [];
+            const addLink = (rawUrl, isGit = false) => {
+              if (!rawUrl || typeof rawUrl !== 'string') return;
+              const clean = rawUrl.trim();
+              const norm = clean.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+              if (isGit && !norm.includes('github') && seen.has(norm)) return;
+              if (!seen.has(norm)) {
+                seen.add(norm);
+                const href = clean.startsWith('http') ? clean : `https://${clean}`;
+                links.push(
+                  <a key={norm} href={href} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                    {clean}
+                  </a>
+                );
+              }
+            };
+            addLink(personalInfo.portfolio);
+            addLink(personalInfo.linkedin);
+            addLink(personalInfo.github, true);
+            return links;
+          })()}
         </div>
       </header>
 
@@ -139,7 +152,6 @@ export default function MinimalTechTemplate({ resume, isEditing, onUpdate }) {
                   <span className="font-bold text-slate-900">
                     {cleanText(proj.name)}
                   </span>
-                  {proj.link && <span className="text-xs font-mono text-indigo-600">{proj.link}</span>}
                 </div>
                 {proj.technologies && (
                   <div className="text-xs font-mono text-indigo-700 font-normal mt-0.5">

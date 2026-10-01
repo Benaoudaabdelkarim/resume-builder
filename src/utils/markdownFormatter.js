@@ -25,14 +25,24 @@ export function resumeJsonToMarkdown(resume) {
     md += `**${cleanText(personalInfo.headline)}**\n\n`;
   }
 
-  const contacts = [
+  const rawContacts = [
     cleanText(personalInfo.location),
     cleanText(personalInfo.phone),
     cleanText(personalInfo.email),
+    cleanText(personalInfo.portfolio),
     cleanText(personalInfo.linkedin),
     cleanText(personalInfo.github),
-    cleanText(personalInfo.portfolio),
   ].filter(Boolean);
+
+  const seen = new Set();
+  const contacts = [];
+  for (const c of rawContacts) {
+    const norm = c.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      contacts.push(c);
+    }
+  }
 
   if (contacts.length > 0) {
     md += `${contacts.join('\n')}\n\n`;
@@ -83,7 +93,6 @@ export function resumeJsonToMarkdown(resume) {
     md += `## Key Projects\n\n`;
     for (const proj of projects) {
       md += `### ${cleanText(proj.name)}${proj.technologies ? ` — ${cleanText(proj.technologies)}` : ''}\n`;
-      if (proj.link) md += `*Link: ${cleanText(proj.link)}*\n`;
       if (Array.isArray(proj.bullets)) {
         for (const b of proj.bullets) {
           md += `* ${cleanText(b)}\n`;

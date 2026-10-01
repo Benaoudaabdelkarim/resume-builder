@@ -140,27 +140,43 @@ h4 {
 
 /* Print optimizations for crisp ATS PDFs */
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
-  }
+  header,
+  nav,
+  aside,
+  button,
   .no-print {
     display: none !important;
   }
-  .print-only {
-    display: block !important;
+
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    overflow: visible !important;
   }
+
+  /* Expand document containers to full width and strip UI borders */
+  #resume-document,
+  #cover-letter-document,
   .resume-paper {
+    display: block !important;
     box-shadow: none !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     min-height: auto !important;
+    border: none !important;
   }
+
   @page {
-    margin: 1.2cm;
+    margin: 10mm;
     size: letter portrait;
   }
+
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   .avoid-break,
   .skill-group,
   .experience-item,

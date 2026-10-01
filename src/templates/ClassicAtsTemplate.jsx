@@ -53,22 +53,32 @@ export default function ClassicAtsTemplate({ resume, isEditing, onUpdate }) {
           )}
           {personalInfo.phone && <span className="italic">| {personalInfo.phone}</span>}
           {personalInfo.location && <span>| {personalInfo.location}</span>}
-          {personalInfo.portfolio && (
-            <span>
-              |{' '}
-              <a href={personalInfo.portfolio.startsWith('http') ? personalInfo.portfolio : `https://${personalInfo.portfolio}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                {personalInfo.portfolio}
-              </a>
-            </span>
-          )}
-          {personalInfo.linkedin && (
-            <span>
-              |{' '}
-              <a href={personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                {personalInfo.linkedin}
-              </a>
-            </span>
-          )}
+          {(() => {
+            const seen = new Set();
+            const links = [];
+            const addLink = (rawUrl, isGit = false) => {
+              if (!rawUrl || typeof rawUrl !== 'string') return;
+              const clean = rawUrl.trim();
+              const norm = clean.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+              if (isGit && !norm.includes('github') && seen.has(norm)) return;
+              if (!seen.has(norm)) {
+                seen.add(norm);
+                const href = clean.startsWith('http') ? clean : `https://${clean}`;
+                links.push(
+                  <span key={norm}>
+                    |{' '}
+                    <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                      {clean}
+                    </a>
+                  </span>
+                );
+              }
+            };
+            addLink(personalInfo.portfolio);
+            addLink(personalInfo.linkedin);
+            addLink(personalInfo.github, true);
+            return links;
+          })()}
         </div>
       </header>
 
@@ -150,7 +160,6 @@ export default function ClassicAtsTemplate({ resume, isEditing, onUpdate }) {
                 )}
                 <div className="flex flex-col sm:flex-row sm:justify-between text-sm">
                   <span className="font-bold text-gray-900">{cleanText(proj.name)}</span>
-                  {proj.link && <span className="text-xs text-blue-600 font-sans">{proj.link}</span>}
                 </div>
                 {proj.technologies && (
                   <div className="font-normal italic text-xs font-sans text-gray-600 mt-0.5">
