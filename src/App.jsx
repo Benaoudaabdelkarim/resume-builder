@@ -4,9 +4,11 @@ import JobInputPanel from './components/JobInputPanel';
 import ResumePreview from './components/ResumePreview';
 import CoverLetterPreview from './components/CoverLetterPreview';
 import ApiKeyModal from './components/ApiKeyModal';
-import ProfileModal from './components/ProfileModal';
 import HistoryDrawer from './components/HistoryDrawer';
+import NavigationDrawer from './components/NavigationDrawer';
+import ProfilePage from './components/ProfilePage';
 import AuthModal from './components/AuthModal';
+import { Button } from './components/ui/button';
 
 import {
   fetchStatus,
@@ -22,11 +24,32 @@ import { getElementPdfBase64 } from './utils/pdfGenerator';
 import { resumeJsonToMarkdown } from './utils/markdownFormatter';
 import { getResumeDocxBase64 } from './utils/docxGenerator';
 import { FileText, Mail, Sparkles } from 'lucide-react';
+import AppAlertDialog from './components/ui/app-alert-dialog';
 
 export default function App() {
+  // Navigation View state: 'builder' | 'profile'
+  const [currentView, setCurrentView] = useState('builder');
+
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // App Alert Dialog state (replaces native alert())
+  const [alertDialog, setAlertDialog] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    type: 'error',
+  });
+
+  const showAlert = (title, description, type = 'error') => {
+    setAlertDialog({
+      isOpen: true,
+      title,
+      description,
+      type,
+    });
+  };
 
   // App system status
   const [hasKey, setHasKey] = useState(false);
@@ -34,14 +57,17 @@ export default function App() {
   const [hasProfile, setHasProfile] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
 
-  // Modals state
+  // Drawers & Modals state
+  const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Inputs
   const [companyName, setCompanyName] = useState('');
   const [roleTitle, setRoleTitle] = useState('');
+  const [minRate, setMinRate] = useState('');
+  const [maxRate, setMaxRate] = useState('');
+  const [rateType, setRateType] = useState('');
   const [jobPost, setJobPost] = useState('');
   const [jobUrl, setJobUrl] = useState('');
   const [notes, setNotes] = useState('');
@@ -97,12 +123,38 @@ export default function App() {
         await refreshStatus();
         await refreshHistory();
       } else {
-        // Prompt login if no user session is found
-        setIsAuthModalOpen(true);
+        await refreshStatus();
+        await refreshHistory();
       }
     } catch {
-      setIsAuthModalOpen(true);
+      await refreshStatus();
+      await refreshHistory();
     }
+  };
+
+  const refreshStatus = async () => {
+    try {
+      const status = await fetchStatus();
+      setHasProfile(status.hasProfile);
+    } catch (err) {
+      console.error('Failed to check status:', err);
+    }
+  };
+
+  const refreshHistory = async () => {
+    try {
+      const data = await fetchApplications();
+      setHistoryCount(data.total ?? data.applications?.length ?? 0);
+    } catch (err) {
+      console.error('Failed to load history count:', err);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setCurrentUser(null);
+    refreshStatus();
+    refreshHistory();
   };
 
   const handleAuthSuccess = (user) => {
@@ -111,187 +163,203 @@ export default function App() {
     refreshHistory();
   };
 
-  const handleLogout = async () => {
-    await logout();
-    setCurrentUser(null);
-    setHistoryCount(0);
-    setHasProfile(false);
-    setIsAuthModalOpen(true);
-  };
-
-  const refreshStatus = async () => {
-    try {
-      const status = await fetchStatus();
-      setHasProfile(status.hasProfile);
-      refreshKeyStatus();
-    } catch (err) {
-      console.error('Failed to get status:', err);
-    }
-  };
-
-  const refreshHistory = async () => {
-    try {
-      const data = await fetchApplications();
-      setHistoryCount(data.applications?.length || 0);
-    } catch (err) {
-      console.error('Failed to get applications history:', err);
-    }
-  };
-
-  // Generate ATS Application using Gemini
   const handleGenerate = async () => {
-    if (!currentUser) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-
-    if (!hasProfile) {
-      setIsProfileModalOpen(true);
-      return;
-    }
-
-    if (!hasKey) {
-      setIsApiKeyModalOpen(true);
-      return;
-    }
-
     setIsGenerating(true);
     setLastSavedFolder(null);
-
     try {
-      const res = await generateApplication({
-        modelName,
+      const response = await generateApplication({
         jobPost,
         companyName,
         roleTitle,
         notes,
+        modelName,
       });
 
-      const { data } = res;
-      if (data.coverLetter) {
-        data.coverLetter.date = new Date().toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        });
-      }
-      setResumeData(data.resume);
-      setCoverLetterData(data.coverLetter);
-      setMatchScore(data.atsMatchScoreEstimate || 95);
-      setMatchedKeywords(data.topKeywordsMatched || []);
-      if (data.resumeMarkdown) {
-        setRawMarkdown(data.resumeMarkdown);
+      const result = response.data || response;
+      if (!result || !result.resume) {
+        throw new Error('The AI model did not return a structured resume. Please try again.');
       }
 
-      if (data.matchedCompany && !companyName) {
-        setCompanyName(data.matchedCompany);
-      }
-      if (data.matchedRole && !roleTitle) {
-        setRoleTitle(data.matchedRole);
-      }
-    } catch (err) {
-      console.error('Generation error:', err);
-      alert('Error generating application: ' + err.message);
+      setResumeData(result.resume);
+      setCoverLetterData(result.coverLetter);
+      setRawMarkdown(result.resumeMarkdown || resumeJsonToMarkdown(result.resume));
+      setMatchScore(result.atsMatchScoreEstimate || result.atsScore || 95);
+      setMatchedKeywords(result.topKeywordsMatched || result.matchedKeywords || []);
+      setActiveTab('resume');
+    } catch (error) {
+      console.error('Generation failed:', error);
+      showAlert('Generation Error', error.message || 'Error generating application.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Save the complete bundle locally
   const handleSaveBundle = async () => {
+    if (!resumeData && !coverLetterData) {
+      showAlert('Notice', 'No generated resume or cover letter to save.', 'warning');
+      return;
+    }
+
     if (!currentUser) {
       setIsAuthModalOpen(true);
       return;
     }
-    if (!resumeData && !coverLetterData) return;
 
     setIsSaving(true);
     try {
-      // Generate PDF base64 representations if possible
       let resumePdfBase64 = null;
       let coverLetterPdfBase64 = null;
+      let resumeDocxBase64 = null;
 
       const resumeEl = document.getElementById('resume-document');
       if (resumeEl) {
-        try {
-          resumePdfBase64 = await getElementPdfBase64(resumeEl, 'resume.pdf');
-        } catch (e) {
-          console.warn('Could not generate resume PDF buffer:', e);
-        }
+        resumePdfBase64 = await getElementPdfBase64(resumeEl);
       }
 
       const coverEl = document.getElementById('cover-letter-document');
       if (coverEl) {
-        try {
-          coverLetterPdfBase64 = await getElementPdfBase64(coverEl, 'cover_letter.pdf');
-        } catch (e) {
-          console.warn('Could not generate cover letter PDF buffer:', e);
-        }
+        coverLetterPdfBase64 = await getElementPdfBase64(coverEl);
       }
 
-      let resumeDocxBase64 = null;
       if (resumeData) {
         try {
           resumeDocxBase64 = await getResumeDocxBase64(resumeData);
-        } catch (e) {
-          console.warn('Could not generate resume DOCX buffer:', e);
+        } catch (docxErr) {
+          console.warn('Word document generation failed during save bundle:', docxErr);
         }
       }
 
-      const savePayload = {
-        companyName: companyName || 'Company',
-        roleTitle: roleTitle || 'Role',
+      const res = await saveBundle({
+        companyName: companyName || resumeData?.personalInfo?.fullName || 'Company',
+        roleTitle: roleTitle || 'Target_Role',
+        minRate: minRate || null,
+        maxRate: maxRate || null,
+        rateType: rateType || null,
         jobPost,
         jobUrl,
         notes,
         resumeData,
-        resumeMarkdown: rawMarkdown || resumeJsonToMarkdown(resumeData),
         coverLetterData,
-        templateId,
+        resumeMarkdown: rawMarkdown || resumeJsonToMarkdown(resumeData),
         resumePdfBase64,
-        resumeDocxBase64,
         coverLetterPdfBase64,
-      };
+        resumeDocxBase64,
+      });
 
-      const result = await saveBundle(savePayload);
-      setLastSavedFolder(result.folderName);
-      refreshHistory();
-    } catch (err) {
-      console.error('Failed to save bundle:', err);
-      alert('Failed to save bundle: ' + err.message);
+      if (res.success) {
+        setLastSavedFolder(res.folderName);
+        refreshHistory();
+      }
+    } catch (error) {
+      console.error('Failed to save bundle:', error);
+      showAlert('Save Bundle Error', 'Error saving bundle: ' + error.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Load a previously saved application
-  const handleLoadApplication = (appData) => {
-    setCompanyName(appData.metadata?.companyName || '');
-    setRoleTitle(appData.metadata?.roleTitle || '');
-    setJobPost(appData.jobPost || '');
-    setJobUrl(appData.jobUrl || appData.metadata?.jobUrl || '');
-    setNotes(appData.notes || '');
-    if (appData.resumeData) setResumeData(appData.resumeData);
-    if (appData.coverLetterData) setCoverLetterData(appData.coverLetterData);
-    if (appData.resumeMarkdown) setRawMarkdown(appData.resumeMarkdown);
-    if (appData.metadata?.templateId) setTemplateId(appData.metadata.templateId);
-    setLastSavedFolder(appData.folderName);
+  const handleLoadApplication = (bundleData) => {
+    if (bundleData.companyName) setCompanyName(bundleData.companyName);
+    if (bundleData.roleTitle) setRoleTitle(bundleData.roleTitle);
+    if (bundleData.jobPost) setJobPost(bundleData.jobPost);
+    if (bundleData.jobUrl) setJobUrl(bundleData.jobUrl);
+    if (bundleData.notes) setNotes(bundleData.notes);
+
+    const loadedMinRate = bundleData.minRate != null ? String(bundleData.minRate) : (bundleData.metadata?.minRate != null ? String(bundleData.metadata.minRate) : '');
+    const loadedMaxRate = bundleData.maxRate != null ? String(bundleData.maxRate) : (bundleData.metadata?.maxRate != null ? String(bundleData.metadata.maxRate) : '');
+    const loadedRateType = bundleData.rateType || bundleData.metadata?.rateType || '';
+
+    setMinRate(loadedMinRate);
+    setMaxRate(loadedMaxRate);
+    setRateType(loadedRateType);
+
+    if (bundleData.resumeData) {
+      setResumeData(bundleData.resumeData);
+      setRawMarkdown(resumeJsonToMarkdown(bundleData.resumeData));
+    }
+    if (bundleData.coverLetterData) {
+      setCoverLetterData(bundleData.coverLetterData);
+    }
+    setLastSavedFolder(bundleData.folderName);
+    setActiveTab('resume');
+    setCurrentView('builder');
   };
 
+  // Full-page Base Profile View
+  if (currentView === 'profile') {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans">
+        <ProfilePage
+          onBack={() => {
+            setCurrentView('builder');
+            refreshStatus();
+          }}
+          onProfileUpdated={() => {
+            refreshStatus();
+          }}
+          user={currentUser}
+        />
+
+        {/* Global Drawers & Modals accessible from everywhere */}
+        <NavigationDrawer
+          isOpen={isNavDrawerOpen}
+          onClose={() => setIsNavDrawerOpen(false)}
+          user={currentUser}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onLogout={handleLogout}
+          onOpenApplications={() => {
+            setIsNavDrawerOpen(false);
+            setIsHistoryOpen(true);
+          }}
+          onOpenApiKey={() => {
+            setIsNavDrawerOpen(false);
+            setIsApiKeyModalOpen(true);
+          }}
+          onNavigateToBaseProfile={() => {
+            setIsNavDrawerOpen(false);
+            setCurrentView('profile');
+          }}
+          hasKey={hasKey}
+          hasProfile={hasProfile}
+          historyCount={historyCount}
+        />
+
+        <ApiKeyModal
+          isOpen={isApiKeyModalOpen}
+          onClose={() => setIsApiKeyModalOpen(false)}
+          onKeySaved={refreshKeyStatus}
+        />
+
+        <HistoryDrawer
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          onLoadApplication={handleLoadApplication}
+        />
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
+        />
+
+        <AppAlertDialog
+          isOpen={alertDialog.isOpen}
+          onClose={() => setAlertDialog((prev) => ({ ...prev, isOpen: false }))}
+          title={alertDialog.title}
+          description={alertDialog.description}
+          type={alertDialog.type}
+        />
+      </div>
+    );
+  }
+
+  // Default Builder Layout
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-slate-100 text-slate-900 font-sans">
-      {/* App Header */}
+    <div className="flex flex-col h-screen bg-slate-100 font-sans text-slate-800 antialiased overflow-hidden">
+      {/* Top Header with Drawer Trigger on the right */}
       <Header
         user={currentUser}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onLogout={handleLogout}
-        hasKey={hasKey}
-        maskedKey={maskedKey}
-        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        hasProfile={hasProfile}
-        onOpenProfileModal={() => setIsProfileModalOpen(true)}
-        onOpenHistory={() => setIsHistoryOpen(true)}
-        historyCount={historyCount}
+        onOpenNavDrawer={() => setIsNavDrawerOpen(true)}
       />
 
       {/* Main Workspace */}
@@ -303,6 +371,12 @@ export default function App() {
             setCompanyName={setCompanyName}
             roleTitle={roleTitle}
             setRoleTitle={setRoleTitle}
+            minRate={minRate}
+            setMinRate={setMinRate}
+            maxRate={maxRate}
+            setMaxRate={setMaxRate}
+            rateType={rateType}
+            setRateType={setRateType}
             jobPost={jobPost}
             setJobPost={setJobPost}
             jobUrl={jobUrl}
@@ -325,29 +399,23 @@ export default function App() {
           {/* Tab Navigation */}
           <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
             <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
-              <button
+              <Button
+                variant={activeTab === 'resume' ? 'primary' : 'ghost'}
+                size="sm"
                 onClick={() => setActiveTab('resume')}
-                className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg transition ${
-                  activeTab === 'resume'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>ATS Resume</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
+                variant={activeTab === 'cover' ? 'primary' : 'ghost'}
+                size="sm"
                 onClick={() => setActiveTab('cover')}
-                className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg transition ${
-                  activeTab === 'cover'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
               >
                 <Mail className="w-3.5 h-3.5" />
                 <span>Cover Letter</span>
-              </button>
+              </Button>
             </div>
 
             {resumeData && (
@@ -386,29 +454,58 @@ export default function App() {
         </div>
       </div>
 
-      {/* Modals & Drawers */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onAuthSuccess={handleAuthSuccess}
+      {/* Workspace Menu Navigation Drawer (From right to left) */}
+      <NavigationDrawer
+        isOpen={isNavDrawerOpen}
+        onClose={() => setIsNavDrawerOpen(false)}
+        user={currentUser}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
+        onOpenApplications={() => {
+          setIsNavDrawerOpen(false);
+          setIsHistoryOpen(true);
+        }}
+        onOpenApiKey={() => {
+          setIsNavDrawerOpen(false);
+          setIsApiKeyModalOpen(true);
+        }}
+        onNavigateToBaseProfile={() => {
+          setIsNavDrawerOpen(false);
+          setCurrentView('profile');
+        }}
+        hasKey={hasKey}
+        hasProfile={hasProfile}
+        historyCount={historyCount}
       />
 
+      {/* Gemini API Key Drawer (From right to left) */}
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
         onKeySaved={refreshKeyStatus}
       />
 
-      <ProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        onProfileUpdated={refreshStatus}
-      />
-
+      {/* Applications Drawer (From right to left) */}
       <HistoryDrawer
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         onLoadApplication={handleLoadApplication}
+      />
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
+
+      {/* App Alert Dialog */}
+      <AppAlertDialog
+        isOpen={alertDialog.isOpen}
+        onClose={() => setAlertDialog((prev) => ({ ...prev, isOpen: false }))}
+        title={alertDialog.title}
+        description={alertDialog.description}
+        type={alertDialog.type}
       />
     </div>
   );

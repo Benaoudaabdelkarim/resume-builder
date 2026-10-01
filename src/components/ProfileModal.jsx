@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, Save, CheckCircle2, FileText, AlertCircle, Sparkles, Copy, Check } from 'lucide-react';
 import { fetchProfile, saveProfile } from '../utils/api';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
 
 const AI_PROMPT_TEMPLATE = `Please generate a super detailed master resume and career profile in Markdown format (.md) detailing all my skills, technical proficiencies, work experience with key metrics and achievements, projects, education, and credentials.`;
 
@@ -92,20 +94,20 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
               <FileText className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Master Career Profile (profile.md)
-              </h3>
+              <h3>Master Career Profile (profile.md)</h3>
               <p className="text-xs text-slate-500">
                 Private to your account. Gemini uses this factual background to tailor every resume.
               </p>
             </div>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+            className="h-8 w-8"
           >
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
 
         {/* AI Guide / Helper Box */}
@@ -121,10 +123,12 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
               </p>
               <div className="bg-white/90 p-2.5 rounded-lg border border-blue-200 font-mono text-[11px] text-blue-950 flex items-center justify-between gap-2 shadow-2xs">
                 <span className="truncate">{AI_PROMPT_TEMPLATE}</span>
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  size="sm"
                   onClick={handleCopyPrompt}
-                  className="flex items-center space-x-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold transition cursor-pointer flex-shrink-0"
+                  className="flex-shrink-0"
                 >
                   {copied ? (
                     <>
@@ -137,7 +141,7 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
                       <span>Copy Prompt</span>
                     </>
                   )}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -146,7 +150,7 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 bg-slate-50 border-b border-slate-200 text-xs">
           <div className="flex items-center space-x-3">
-            <label className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg cursor-pointer transition font-semibold shadow-2xs">
+            <label className="btn-secondary btn-sm cursor-pointer">
               <Upload className="w-3.5 h-3.5 text-blue-600" />
               <span>Import .md File</span>
               <input
@@ -179,12 +183,12 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
 
         {/* Editor Body */}
         <div className="flex-1 p-5 overflow-hidden flex flex-col bg-slate-50/30">
-          <textarea
+          <Textarea
             value={profileText}
             onChange={(e) => setProfileText(e.target.value)}
             disabled={loading}
             placeholder={`# Full Name\nEmail: ... | Phone: ... | Location: ... | LinkedIn / GitHub\n\n## Professional Summary\nDetailed summary of your career...\n\n## Technical Skills\n- Languages: ...\n- Frameworks & Tools: ...\n\n## Work Experience\n### Role Title — Company Name\n*Period | Location*\n* Bullet point detailing achievement, metrics, tools...\n\n## Education & Certifications\n...`}
-            className="flex-1 w-full bg-white border border-slate-200 rounded-xl p-4 text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none leading-relaxed shadow-inner"
+            className="flex-1 font-mono"
           />
         </div>
 
@@ -198,20 +202,20 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
             )}
           </span>
           <div className="flex space-x-2">
-            <button
+            <Button
+              variant="ghost"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={handleSave}
               disabled={saving || !profileText.trim()}
-              className="flex items-center space-x-1.5 px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{saving ? 'Saving...' : 'Save Profile (.md)'}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>

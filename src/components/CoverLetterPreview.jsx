@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Download, Copy, Check, Printer, Edit3, Sparkles } from 'lucide-react';
 import { downloadElementAsPdf, triggerPrint } from '../utils/pdfGenerator';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import AppAlertDialog from './ui/app-alert-dialog';
 
 export default function CoverLetterPreview({
   coverLetterData,
@@ -11,12 +15,13 @@ export default function CoverLetterPreview({
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [errorDialog, setErrorDialog] = useState({ isOpen: false, title: '', message: '' });
 
   if (!coverLetterData) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-12 text-center text-slate-500 border-2 border-dashed border-slate-300 rounded-xl bg-white shadow-xs">
         <Sparkles className="w-12 h-12 text-blue-500 mb-3 animate-pulse" />
-        <h3 className="text-lg font-bold text-slate-800">No Cover Letter Generated Yet</h3>
+        <h3>No Cover Letter Generated Yet</h3>
         <p className="text-sm max-w-md mt-1 text-slate-500">
           Generate an ATS application to see your targeted cover letter matched to this company.
         </p>
@@ -76,7 +81,11 @@ export default function CoverLetterPreview({
       const filename = `${senderName.replace(/\s+/g, '_')}_Cover_Letter_${company.replace(/\s+/g, '_')}.pdf`;
       await downloadElementAsPdf(el, filename);
     } catch (err) {
-      alert('Failed to export PDF: ' + err.message);
+      setErrorDialog({
+        isOpen: true,
+        title: 'PDF Export Failed',
+        message: err.message || 'Could not export cover letter PDF.',
+      });
     } finally {
       setIsDownloading(false);
     }
@@ -91,11 +100,10 @@ export default function CoverLetterPreview({
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
+          <Button
+            variant={isEditing ? 'primary' : 'secondary'}
+            size="sm"
             onClick={() => setIsEditing(!isEditing)}
-            className={`flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition ${
-              isEditing ? 'bg-amber-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-            }`}
           >
             {isEditing ? (
               <>
@@ -108,11 +116,12 @@ export default function CoverLetterPreview({
                 <span>Edit Text</span>
               </>
             )}
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleCopy}
-            className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
           >
             {copied ? (
               <>
@@ -125,24 +134,26 @@ export default function CoverLetterPreview({
                 <span>Copy Text</span>
               </>
             )}
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={triggerPrint}
-            className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
           >
             <Printer className="w-3.5 h-3.5 text-slate-600" />
             <span>Print</span>
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleDownload}
             disabled={isDownloading}
-            className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
             <span>{isDownloading ? 'Exporting...' : 'Export PDF'}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -161,11 +172,11 @@ export default function CoverLetterPreview({
 
           <div className="text-sm text-gray-700 mb-6 space-y-1">
             {isEditing ? (
-              <input
+              <Input
                 type="text"
                 value={activeDate}
                 onChange={(e) => handleDateChange(e.target.value)}
-                className="text-sm text-gray-800 border border-blue-300 rounded px-2 py-0.5 focus:outline-none w-48 font-medium"
+                className="w-48 inline-block"
               />
             ) : (
               <p>{activeDate}</p>
@@ -180,9 +191,8 @@ export default function CoverLetterPreview({
             {bodyParagraphs.map((para, idx) => (
               <div key={idx} className="avoid-break">
                 {isEditing ? (
-                  <textarea
+                  <Textarea
                     rows={4}
-                    className="w-full text-sm text-gray-800 border border-blue-300 rounded p-2 focus:outline-none"
                     value={para}
                     onChange={(e) => handleParagraphChange(idx, e.target.value)}
                   />
@@ -199,6 +209,14 @@ export default function CoverLetterPreview({
           </div>
         </div>
       </div>
+
+      <AppAlertDialog
+        isOpen={errorDialog.isOpen}
+        onClose={() => setErrorDialog((prev) => ({ ...prev, isOpen: false }))}
+        title={errorDialog.title}
+        description={errorDialog.message}
+        type="error"
+      />
     </div>
   );
 }

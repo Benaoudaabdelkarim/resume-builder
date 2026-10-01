@@ -193,23 +193,93 @@ Return ONLY valid JSON matching this schema:
 }
 `;
 
-  const model = genAI.getGenerativeModel({
-    model: selectedModel,
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: 'application/json',
-    },
-  });
+  // Helper to attempt generation with retries and fallback models upon demand spikes
+  const candidateModels = [selectedModel];
+  if (!candidateModels.includes('gemini-3.5-flash-lite')) candidateModels.push('gemini-3.5-flash-lite');
+  if (!candidateModels.includes('gemini-3.8-flash')) candidateModels.push('gemini-3.8-flash');
+  if (!candidateModels.includes('gemini-2.5-flash')) candidateModels.push('gemini-2.5-flash');
 
-  const result = await model.generateContent(prompt);
-  const responseText = result.response.text();
+  let lastError = null;
+  let responseText = '';
+  let activeModelUsed = selectedModel;
 
-  let parsed;
+  for (const currentModel of candidateModels) {
+    let succeeded = false;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: currentModel,
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: 'application/json',
+          },
+        });
+
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        if (text && text.trim().length > 0) {
+          responseText = text;
+          activeModelUsed = currentModel;
+          succeeded = true;
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+        const msg = (err.message || '').toLowerCase();
+        const isSpikeDemand =
+          msg.includes('503') ||
+          msg.includes('overloaded') ||
+          msg.includes('high demand') ||
+          msg.includes('resource exhausted') ||
+          msg.includes('rate limit') ||
+          msg.includes('429');
+
+        if (isSpikeDemand && attempt < 2) {
+          // Exponential backoff: 1.5s, 3s
+          const delay = Math.pow(2, attempt) * 1500 + Math.random() * 500;
+          console.warn(`[Gemini] ${currentModel} encountered temporary demand spike (${err.message}). Retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/2)...`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        if (isSpikeDemand) {
+          console.warn(`[Gemini] ${currentModel} capacity reached. Trying alternative model...`);
+          break; // break inner loop to try next model in candidateModels
+        }
+
+        throw err;
+      }
+    }
+
+    if (succeeded) break;
+  }
+
+  if (!responseText) {
+    const errorDetail = lastError?.message || 'No response returned from Gemini';
+    if (errorDetail.toLowerCase().includes('503') || errorDetail.toLowerCase().includes('demand') || errorDetail.toLowerCase().includes('overloaded')) {
+      throw new Error(`Google Gemini is currently experiencing a global traffic demand spike (503). We attempted automatic retries and fallback models. Please wait 10-15 seconds and try again, or select Gemini 3.5 Flash Lite.`);
+    }
+    throw new Error(`Failed to generate application: ${errorDetail}`);
+  }
+
+  let parsed = null;
   try {
     parsed = JSON.parse(responseText);
   } catch (err) {
-    const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    parsed = JSON.parse(cleaned);
+    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      try {
+        parsed = JSON.parse(jsonMatch[1]);
+      } catch {}
+    }
+    if (!parsed) {
+      const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    }
+  }
+
+  if (!parsed || !parsed.resume) {
+    throw new Error('AI returned an incomplete response. Please click Generate ATS Application again.');
   }
 
   // Always guarantee the cover letter date is today's current date
@@ -217,6 +287,7 @@ Return ONLY valid JSON matching this schema:
     parsed.coverLetter.date = todayFormatted;
   }
 
+  parsed.modelUsed = activeModelUsed;
   return sanitizeData(parsed);
 }
 

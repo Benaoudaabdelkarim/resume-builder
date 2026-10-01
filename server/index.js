@@ -25,6 +25,7 @@ import {
   deleteSession,
 } from './db.js';
 import { authMiddleware, optionalAuthMiddleware } from './auth.js';
+import { extractSalaryInfo } from './salaryExtractor.js';
 
 dotenv.config();
 
@@ -212,13 +213,18 @@ app.post('/api/fetch-job-url', async (req, res) => {
             .map((l) => l.trim())
             .filter((l) => l.length > 0);
 
+          const fullCleanText = cleanLines.join('\n').slice(0, 20000);
+          const salary = extractSalaryInfo(fullCleanText);
           return res.json({
             success: true,
             url,
             title,
             company: companyFormatted,
             location,
-            text: cleanLines.join('\n').slice(0, 20000),
+            text: fullCleanText,
+            minRate: salary.minRate,
+            maxRate: salary.maxRate,
+            rateType: salary.rateType,
           });
         }
       }
@@ -242,13 +248,18 @@ app.post('/api/fetch-job-url', async (req, res) => {
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
             .replace(/&quot;/g, '"');
+          const fullText = cleanContent.slice(0, 20000);
+          const salary = extractSalaryInfo(fullText);
           return res.json({
             success: true,
             url,
             title: job.title || '',
             company: board.charAt(0).toUpperCase() + board.slice(1),
             location: job.location?.name || '',
-            text: cleanContent.slice(0, 20000),
+            text: fullText,
+            minRate: salary.minRate,
+            maxRate: salary.maxRate,
+            rateType: salary.rateType,
           });
         }
       }
@@ -263,13 +274,18 @@ app.post('/api/fetch-job-url', async (req, res) => {
         if (apiRes.ok) {
           const job = await apiRes.json();
           const text = `${job.text || ''}\n\n${job.descriptionPlain || ''}\n\n${(job.lists || []).map((l) => `${l.text}:\n${l.content}`).join('\n\n')}`;
+          const fullText = text.slice(0, 20000);
+          const salary = extractSalaryInfo(fullText);
           return res.json({
             success: true,
             url,
             title: job.text || '',
             company: company.charAt(0).toUpperCase() + company.slice(1),
             location: job.categories?.location || '',
-            text: text.slice(0, 20000),
+            text: fullText,
+            minRate: salary.minRate,
+            maxRate: salary.maxRate,
+            rateType: salary.rateType,
           });
         }
       }
@@ -329,12 +345,16 @@ app.post('/api/fetch-job-url', async (req, res) => {
 
           const fullText = lines.join('\n');
           if (fullText.length > 80) {
+            const salary = extractSalaryInfo(fullText, parsed);
             return res.json({
               success: true,
               url,
               title: jobTitle,
               company: companyName,
               text: fullText.slice(0, 20000),
+              minRate: salary.minRate,
+              maxRate: salary.maxRate,
+              rateType: salary.rateType,
             });
           }
         }
@@ -385,11 +405,15 @@ app.post('/api/fetch-job-url', async (req, res) => {
       });
     }
 
+    const salary = extractSalaryInfo(text);
     res.json({
       success: true,
       url,
       title,
       text: text.slice(0, 20000),
+      minRate: salary.minRate,
+      maxRate: salary.maxRate,
+      rateType: salary.rateType,
     });
   } catch (error) {
     res.status(500).json({
@@ -501,7 +525,7 @@ app.post('/api/generate', optionalAuthMiddleware, async (req, res) => {
       });
     }
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: result, ...result });
   } catch (error) {
     console.error('Error generating application:', error);
     res.status(500).json({ error: error.message || 'Generation failed' });
@@ -509,7 +533,7 @@ app.post('/api/generate', optionalAuthMiddleware, async (req, res) => {
 });
 
 // Save Application Bundle
-app.post('/api/save-bundle', authMiddleware, async (req, res) => {
+app.post('/api/save-bundle', optionalAuthMiddleware, async (req, res) => {
   try {
     const result = await saveApplicationBundle(req.body, req.userId);
     res.json(result);
@@ -520,17 +544,17 @@ app.post('/api/save-bundle', authMiddleware, async (req, res) => {
 });
 
 // List saved applications
-app.get('/api/applications', authMiddleware, (req, res) => {
+app.get('/api/applications', optionalAuthMiddleware, (req, res) => {
   try {
     const list = listApplications(req.userId);
-    res.json({ applications: list });
+    res.json({ applications: list, total: list.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get a specific application bundle
-app.get('/api/applications/:folderName', authMiddleware, (req, res) => {
+app.get('/api/applications/:folderName', optionalAuthMiddleware, (req, res) => {
   try {
     const data = getApplication(req.params.folderName, req.userId);
     if (!data) {
@@ -555,6 +579,18 @@ app.get('/api/applications/:folderName/file/:fileName', optionalAuthMiddleware, 
     res.status(500).json({ error: error.message });
   }
 });
+
+// Serve production static frontend if dist/ exists
+const DIST_DIR = path.join(ROOT_DIR, 'dist');
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);

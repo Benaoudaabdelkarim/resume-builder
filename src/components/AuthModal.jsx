@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, User, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { login, register } from '../utils/api';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -74,47 +76,41 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
           <div>
-            <h3 className="text-base font-bold text-slate-900">
-              {isRegister ? 'Create Your Account' : 'Sign In to Your Workspace'}
-            </h3>
+            <h3>{isRegister ? 'Create Your Account' : 'Sign In to Your Workspace'}</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               {isRegister
                 ? 'Store your profile & tailored applications privately'
                 : 'Access your saved applications and profile'}
             </p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+            className="h-8 w-8"
           >
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Tab switch */}
-        <div className="flex border-b border-slate-200 text-xs font-semibold">
-          <button
+        <div className="flex border-b border-slate-200 text-xs font-semibold p-1 bg-slate-50">
+          <Button
             type="button"
+            variant={!isRegister ? 'primary' : 'ghost'}
             onClick={() => switchMode(false)}
-            className={`flex-1 py-3 text-center transition border-b-2 ${
-              !isRegister
-                ? 'border-blue-600 text-blue-600 bg-blue-50/30'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            className="flex-1"
           >
             Sign In
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={isRegister ? 'primary' : 'ghost'}
             onClick={() => switchMode(true)}
-            className={`flex-1 py-3 text-center transition border-b-2 ${
-              isRegister
-                ? 'border-blue-600 text-blue-600 bg-blue-50/30'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            className="flex-1"
           >
             Register (New Account)
-          </button>
+          </Button>
         </div>
 
         {/* Form */}
@@ -141,13 +137,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                <input
+                <Input
                   type="text"
                   required
                   placeholder="Alex Morgan"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 transition"
+                  className="pl-9"
                 />
               </div>
             </div>
@@ -160,13 +156,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
+              <Input
                 type="email"
                 required
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 transition"
+                className="pl-9"
               />
             </div>
           </div>
@@ -178,13 +174,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
+              <Input
                 type="password"
                 required
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 transition"
+                className="pl-9"
               />
             </div>
             {isRegister && (
@@ -195,10 +191,11 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           </div>
 
           {/* Submit Button */}
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md shadow-blue-500/20 transition mt-2 cursor-pointer"
+            variant="primary"
+            className="w-full"
           >
             {loading ? (
               <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
@@ -208,7 +205,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

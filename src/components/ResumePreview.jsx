@@ -6,6 +6,9 @@ import MinimalTechTemplate from '../templates/MinimalTechTemplate';
 import { downloadElementAsPdf, triggerPrint } from '../utils/pdfGenerator';
 import { resumeJsonToMarkdown } from '../utils/markdownFormatter';
 import { downloadResumeAsDocx } from '../utils/docxGenerator';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import AppAlertDialog from './ui/app-alert-dialog';
 
 export default function ResumePreview({
   resumeData,
@@ -25,6 +28,7 @@ export default function ResumePreview({
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [errorDialog, setErrorDialog] = useState({ isOpen: false, title: '', message: '' });
   const printAreaRef = useRef(null);
 
   const displayedMarkdown = rawMarkdown || resumeJsonToMarkdown(resumeData);
@@ -57,7 +61,7 @@ export default function ResumePreview({
     return (
       <div className="h-full flex flex-col items-center justify-center p-12 text-center text-slate-500 border-2 border-dashed border-slate-300 rounded-xl bg-white shadow-xs">
         <Sparkles className="w-12 h-12 text-blue-500 mb-3 animate-pulse" />
-        <h3 className="text-lg font-bold text-slate-800">No Resume Generated Yet</h3>
+        <h3>No Resume Generated Yet</h3>
         <p className="text-sm max-w-md mt-1 text-slate-500">
           Paste a job description on the left and click <strong className="text-blue-600">Generate ATS Application</strong> to see your tailored resume preview here.
         </p>
@@ -75,7 +79,11 @@ export default function ResumePreview({
       await downloadElementAsPdf(docElement, filename);
     } catch (err) {
       console.error('Download failed:', err);
-      alert('Could not generate PDF: ' + err.message);
+      setErrorDialog({
+        isOpen: true,
+        title: 'PDF Export Failed',
+        message: err.message || 'Could not generate PDF document.',
+      });
     } finally {
       setIsDownloading(false);
     }
@@ -87,7 +95,11 @@ export default function ResumePreview({
       await downloadResumeAsDocx(resumeData, companyName);
     } catch (err) {
       console.error('Word download failed:', err);
-      alert('Could not generate Word document: ' + err.message);
+      setErrorDialog({
+        isOpen: true,
+        title: 'Word Export Failed',
+        message: err.message || 'Could not generate Word document.',
+      });
     } finally {
       setIsDownloadingDocx(false);
     }
@@ -103,19 +115,20 @@ export default function ResumePreview({
           <select
             value={templateId}
             onChange={(e) => setTemplateId(e.target.value)}
-            className="bg-slate-50 text-slate-800 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500"
+            className="w-auto"
           >
             <option value="modern">Modern ATS (Recommended)</option>
             <option value="classic">Classic Executive ATS</option>
-            <option value="minimal">Minimalist Tech ATS</option>
+            <option value="minimal">MinimalTech ATS</option>
           </select>
         </div>
 
         {/* View mode toggle & edit toggle */}
         <div className="flex items-center space-x-2">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setViewMode(viewMode === 'visual' ? 'markdown' : 'visual')}
-            className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
             title="Toggle between rendered ATS preview and raw Markdown"
           >
             {viewMode === 'visual' ? (
@@ -129,13 +142,12 @@ export default function ResumePreview({
                 <span>View ATS Preview</span>
               </>
             )}
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant={isEditing ? 'primary' : 'secondary'}
+            size="sm"
             onClick={() => setIsEditing(!isEditing)}
-            className={`flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition ${
-              isEditing ? 'bg-amber-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-            }`}
           >
             {isEditing ? (
               <>
@@ -148,36 +160,39 @@ export default function ResumePreview({
                 <span>Customize / Edit</span>
               </>
             )}
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={triggerPrint}
-            className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
             title="Print or Save as Vector PDF with browser dialog"
           >
             <Printer className="w-3.5 h-3.5 text-slate-600" />
             <span>Print</span>
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleDownload}
             disabled={isDownloading}
-            className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition disabled:opacity-50"
             title="Download ATS Resume in PDF format"
           >
             <Download className="w-3.5 h-3.5" />
             <span>{isDownloading ? 'Exporting...' : 'Export PDF'}</span>
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleDownloadDocx}
             disabled={isDownloadingDocx}
-            className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-xs transition disabled:opacity-50"
             title="Download ATS Resume in Microsoft Word (.docx) format"
           >
             <FileText className="w-3.5 h-3.5 text-indigo-600" />
             <span>{isDownloadingDocx ? 'Generating Word...' : 'Word (.docx)'}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -227,9 +242,10 @@ export default function ResumePreview({
                 ATS Markdown Source
               </span>
               <div className="flex items-center space-x-2">
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={handleCopyMarkdown}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
                   title="Copy raw markdown to clipboard"
                 >
                   {copied ? (
@@ -243,23 +259,24 @@ export default function ResumePreview({
                       <span>Copy Markdown</span>
                     </>
                   )}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={handleDownloadMarkdown}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
                   title="Download as .md file"
                 >
                   <Download className="w-3.5 h-3.5 text-slate-600" />
                   <span>Download .md</span>
-                </button>
+                </Button>
               </div>
             </div>
 
             {isEditing ? (
-              <textarea
+              <Textarea
                 value={displayedMarkdown}
                 onChange={(e) => handleMarkdownChange(e.target.value)}
-                className="w-full h-[650px] p-4 font-mono text-xs text-slate-800 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 resize-y leading-relaxed"
+                className="w-full h-[650px] font-mono resize-y"
                 placeholder="Resume markdown..."
               />
             ) : (
@@ -270,6 +287,14 @@ export default function ResumePreview({
           </div>
         )}
       </div>
+
+      <AppAlertDialog
+        isOpen={errorDialog.isOpen}
+        onClose={() => setErrorDialog((prev) => ({ ...prev, isOpen: false }))}
+        title={errorDialog.title}
+        description={errorDialog.message}
+        type="error"
+      />
     </div>
   );
 }

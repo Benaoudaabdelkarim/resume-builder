@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { extractSalaryInfo } from './salaryExtractor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -181,21 +182,25 @@ export function coverLetterToText(cl) {
 /**
  * Save complete application bundle.
  */
-export async function saveApplicationBundle({
-  companyName = 'UnknownCompany',
-  roleTitle = 'Role',
-  jobPost = '',
-  jobUrl = '',
-  notes = '',
-  resumeData,
-  resumeMarkdown = '',
-  coverLetterData,
-  coverLetterText = '',
-  templateId = 'modern',
-  resumePdfBase64 = null,
-  resumeDocxBase64 = null,
-  coverLetterPdfBase64 = null,
-}, userId = null) {
+export async function saveApplicationBundle(bundleData = {}, userId = null) {
+  const {
+    companyName = 'UnknownCompany',
+    roleTitle = 'Role',
+    jobPost = '',
+    jobUrl = '',
+    notes = '',
+    resumeData,
+    resumeMarkdown = '',
+    coverLetterData,
+    coverLetterText = '',
+    templateId = 'modern',
+    resumePdfBase64 = null,
+    resumeDocxBase64 = null,
+    coverLetterPdfBase64 = null,
+    minRate: inputMinRate = null,
+    maxRate: inputMaxRate = null,
+    rateType: inputRateType = null,
+  } = bundleData;
   const appsDir = getUserApplicationsDir(userId);
   const dateStr = new Date().toISOString().slice(0, 10);
   const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '');
@@ -250,12 +255,27 @@ export async function saveApplicationBundle({
     fs.writeFileSync(path.join(targetDir, 'cover_letter.pdf'), coverBuf);
   }
 
-  // 6. Save Bundle Metadata for fast browsing
+  // 6. Extract / Save Salary Rates in Metadata
+  let minRate = inputMinRate;
+  let maxRate = inputMaxRate;
+  let rateType = inputRateType;
+
+  if ((minRate === null || minRate === undefined || minRate === '') && (maxRate === null || maxRate === undefined || maxRate === '')) {
+    const extracted = extractSalaryInfo(jobPost);
+    minRate = extracted.minRate;
+    maxRate = extracted.maxRate;
+    rateType = extracted.rateType;
+  }
+
+  // Save Bundle Metadata for fast browsing
   const metadata = {
     folderName,
     createdAt: new Date().toISOString(),
     companyName,
     roleTitle,
+    minRate,
+    maxRate,
+    rateType,
     jobUrl: jobUrl || null,
     templateId,
     hasResumePdf: Boolean(resumePdfBase64),
@@ -268,28 +288,79 @@ export async function saveApplicationBundle({
 }
 
 /**
- * List all saved applications for a user.
+ * List all saved applications for a user (including root applications directory and local user stores).
  */
 export function listApplications(userId = null) {
-  const appsDir = getUserApplicationsDir(userId);
-  if (!fs.existsSync(appsDir)) return [];
-  const entries = fs.readdirSync(appsDir, { withFileTypes: true });
-
-  const list = [];
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const dirPath = path.join(appsDir, entry.name);
-      const metaPath = path.join(dirPath, 'metadata.json');
-
-      if (fs.existsSync(metaPath)) {
-        try {
-          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-          list.push(meta);
-        } catch {
-          list.push({ folderName: entry.name });
+  const dirs = [];
+  if (userId) {
+    dirs.push(getUserApplicationsDir(userId));
+  }
+  if (fs.existsSync(USERS_DIR)) {
+    try {
+      const userFolders = fs.readdirSync(USERS_DIR);
+      for (const u of userFolders) {
+        const uAppDir = path.join(USERS_DIR, u, 'applications');
+        if (fs.existsSync(uAppDir) && !dirs.includes(uAppDir)) {
+          dirs.push(uAppDir);
         }
-      } else {
-        list.push({ folderName: entry.name });
+      }
+    } catch {}
+  }
+  dirs.push(APPLICATIONS_DIR);
+
+  const seenFolders = new Set();
+  const list = [];
+
+  for (const appsDir of dirs) {
+    if (!fs.existsSync(appsDir)) continue;
+    const entries = fs.readdirSync(appsDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isDirectory() && !seenFolders.has(entry.name)) {
+        const dirPath = path.join(appsDir, entry.name);
+        try {
+          const files = fs.readdirSync(dirPath);
+          if (files.length === 0) continue; // Skip empty directories
+        } catch {
+          continue;
+        }
+
+        seenFolders.add(entry.name);
+        const metaPath = path.join(dirPath, 'metadata.json');
+
+        if (fs.existsSync(metaPath)) {
+          try {
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+            if (!meta.folderName) meta.folderName = entry.name;
+            // Backfill salary info if missing in older metadata
+            if (meta.minRate === undefined && meta.maxRate === undefined) {
+              const jobPostFile = path.join(dirPath, 'job_post.txt');
+              if (fs.existsSync(jobPostFile)) {
+                const text = fs.readFileSync(jobPostFile, 'utf-8');
+                const sal = extractSalaryInfo(text);
+                meta.minRate = sal.minRate;
+                meta.maxRate = sal.maxRate;
+                meta.rateType = sal.rateType;
+              }
+            }
+            list.push(meta);
+          } catch {
+            list.push({ folderName: entry.name });
+          }
+        } else {
+          // Reconstruct basic metadata from folder name
+          const parts = entry.name.split('_');
+          const datePart = parts[0] || '';
+          list.push({
+            folderName: entry.name,
+            companyName: parts[1] ? parts[1].replace(/-/g, ' ') : 'Company',
+            roleTitle: parts.slice(2, -1).join(' ') || 'Role',
+            createdAt: datePart,
+            hasResumePdf: fs.existsSync(path.join(dirPath, 'resume.pdf')),
+            hasResumeDocx: fs.existsSync(path.join(dirPath, 'resume.docx')),
+            hasCoverLetterPdf: fs.existsSync(path.join(dirPath, 'cover_letter.pdf')),
+          });
+        }
       }
     }
   }
@@ -302,10 +373,37 @@ export function listApplications(userId = null) {
  * Get all files from a specific saved application for a user.
  */
 export function getApplication(folderName, userId = null) {
-  const appsDir = getUserApplicationsDir(userId);
   const safeFolder = path.basename(folderName);
-  const targetDir = path.join(appsDir, safeFolder);
-  if (!fs.existsSync(targetDir)) return null;
+  let targetDir = null;
+
+  if (userId) {
+    const userAppDir = path.join(getUserApplicationsDir(userId), safeFolder);
+    if (fs.existsSync(userAppDir)) {
+      targetDir = userAppDir;
+    }
+  }
+
+  if (!targetDir && fs.existsSync(USERS_DIR)) {
+    try {
+      const userFolders = fs.readdirSync(USERS_DIR);
+      for (const u of userFolders) {
+        const candidate = path.join(USERS_DIR, u, 'applications', safeFolder);
+        if (fs.existsSync(candidate)) {
+          targetDir = candidate;
+          break;
+        }
+      }
+    } catch {}
+  }
+
+  if (!targetDir) {
+    const rootAppDir = path.join(APPLICATIONS_DIR, safeFolder);
+    if (fs.existsSync(rootAppDir)) {
+      targetDir = rootAppDir;
+    }
+  }
+
+  if (!targetDir) return null;
 
   const readSafe = (file) => {
     const p = path.join(targetDir, file);
@@ -323,6 +421,11 @@ export function getApplication(folderName, userId = null) {
   return {
     folderName: safeFolder,
     metadata,
+    companyName: metadata?.companyName || '',
+    roleTitle: metadata?.roleTitle || '',
+    minRate: metadata?.minRate ?? null,
+    maxRate: metadata?.maxRate ?? null,
+    rateType: metadata?.rateType ?? null,
     jobPost: readSafe('job_post.txt') || '',
     jobUrl: readSafe('job_url.txt') || metadata?.jobUrl || '',
     notes: readSafe('notes.txt') || '',
@@ -340,13 +443,33 @@ export function getApplication(folderName, userId = null) {
  * Get file path within an application bundle.
  */
 export function getApplicationFilePath(folderName, fileName, userId = null) {
-  const appsDir = getUserApplicationsDir(userId);
   const safeFolder = path.basename(folderName);
   const safeFile = path.basename(fileName);
-  const filePath = path.join(appsDir, safeFolder, safeFile);
-  if (fs.existsSync(filePath)) {
-    return filePath;
+
+  if (userId) {
+    const userFilePath = path.join(getUserApplicationsDir(userId), safeFolder, safeFile);
+    if (fs.existsSync(userFilePath)) {
+      return userFilePath;
+    }
   }
+
+  if (fs.existsSync(USERS_DIR)) {
+    try {
+      const userFolders = fs.readdirSync(USERS_DIR);
+      for (const u of userFolders) {
+        const candidate = path.join(USERS_DIR, u, 'applications', safeFolder, safeFile);
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      }
+    } catch {}
+  }
+
+  const rootFilePath = path.join(APPLICATIONS_DIR, safeFolder, safeFile);
+  if (fs.existsSync(rootFilePath)) {
+    return rootFilePath;
+  }
+
   return null;
 }
 
