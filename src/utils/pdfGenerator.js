@@ -102,6 +102,7 @@ export function triggerPrint(elementOrId, documentTitle = 'Document') {
           *, *::before, *::after {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            box-sizing: border-box !important;
           }
           html, body {
             background: #ffffff !important;
@@ -110,15 +111,46 @@ export function triggerPrint(elementOrId, documentTitle = 'Document') {
             padding: 0 !important;
             font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
           }
-          .isolated-print-wrapper {
+          .print-layout-table {
             width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 auto !important;
-            padding: 10mm 14mm !important;
-            box-sizing: border-box !important;
-            box-shadow: none !important;
+            border-collapse: collapse !important;
+            border-spacing: 0 !important;
             border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
             background: #ffffff !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tfoot {
+            display: table-footer-group !important;
+          }
+          tbody {
+            display: table-row-group !important;
+          }
+          tr {
+            page-break-inside: auto !important;
+          }
+          .print-spacer-header {
+            height: 14mm !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+            visibility: hidden !important;
+          }
+          .print-spacer-footer {
+            height: 14mm !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+            visibility: hidden !important;
+          }
+          .print-page-content {
+            padding: 0 14mm !important;
+            margin: 0 !important;
+            border: none !important;
+            vertical-align: top !important;
+            box-shadow: none !important;
+            background: transparent !important;
           }
           .avoid-break, .skill-group, .experience-item, .education-item, .project-item, li, p, h1, h2, h3, h4 {
             page-break-inside: avoid !important;
@@ -132,9 +164,29 @@ export function triggerPrint(elementOrId, documentTitle = 'Document') {
         </style>
       </head>
       <body>
-        <div class="isolated-print-wrapper ${element.className || ''}">
-          ${element.innerHTML}
-        </div>
+        <table class="print-layout-table">
+          <thead>
+            <tr>
+              <td>
+                <div class="print-spacer-header">&nbsp;</div>
+              </td>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="print-page-content ${element.className || ''}">
+                ${element.innerHTML}
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>
+                <div class="print-spacer-footer">&nbsp;</div>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </body>
     </html>
   `);
