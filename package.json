@@ -8,7 +8,8 @@
     "dev:client": "vite",
     "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT\" -c \"cyan.bold,green.bold\" \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "reset-password": "node server/reset-password.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",

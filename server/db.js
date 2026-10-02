@@ -202,3 +202,40 @@ export function getUserById(id) {
     createdAt: record.created_at,
   };
 }
+
+/**
+ * Update user password by email.
+ */
+export function updateUserPassword(email, newPassword) {
+  if (!email || !email.trim()) {
+    throw new Error('Email is required');
+  }
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('New password must be at least 6 characters long');
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const userStmt = db.prepare('SELECT id, name, email FROM users WHERE email = ?');
+  const user = userStmt.get(cleanEmail);
+
+  if (!user) {
+    throw new Error(`No user found with email: ${cleanEmail}`);
+  }
+
+  const newSalt = crypto.randomBytes(16).toString('hex');
+  const newPasswordHash = hashPassword(newPassword, newSalt);
+
+  const updateStmt = db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?');
+  updateStmt.run(newPasswordHash, newSalt, user.id);
+
+  // Invalidate any active sessions for this user so they must re-authenticate
+  const invalidateStmt = db.prepare('DELETE FROM sessions WHERE user_id = ?');
+  invalidateStmt.run(user.id);
+
+  return {
+    success: true,
+    id: user.id,
+    name: user.name,
+    email: user.email,
+  };
+}

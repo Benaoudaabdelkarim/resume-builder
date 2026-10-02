@@ -23,6 +23,7 @@ import {
   createSession,
   getUserBySession,
   deleteSession,
+  updateUserPassword,
 } from './db.js';
 import { authMiddleware, optionalAuthMiddleware } from './auth.js';
 import { extractSalaryInfo } from './salaryExtractor.js';
@@ -121,6 +122,34 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Auth: Change password
+app.post('/api/auth/change-password', authMiddleware, (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    // Verify current password first
+    const authenticated = authenticateUser(req.user.email, currentPassword);
+    if (!authenticated) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    updateUserPassword(req.user.email, newPassword);
+
+    // Issue a fresh new session token
+    const newSession = createSession(req.user.id);
+    res.json({
+      success: true,
+      message: 'Password changed successfully.',
+      token: newSession.token,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to update password.' });
   }
 });
 
