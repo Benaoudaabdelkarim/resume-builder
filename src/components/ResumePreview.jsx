@@ -57,6 +57,26 @@ export default function ResumePreview({
     }
   };
 
+  const toggleEditing = () => {
+    if (isEditing && onUpdateResume && Array.isArray(resumeData?.skills)) {
+      const updated = JSON.parse(JSON.stringify(resumeData));
+      let changed = false;
+      updated.skills.forEach((g) => {
+        if (typeof g.items === 'string') {
+          g.items = g.items
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          changed = true;
+        }
+      });
+      if (changed) {
+        onUpdateResume(updated);
+      }
+    }
+    setIsEditing(!isEditing);
+  };
+
   if (!resumeData) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-12 text-center text-slate-500 border-2 border-dashed border-slate-300 rounded-xl bg-white shadow-xs">
@@ -147,7 +167,7 @@ export default function ResumePreview({
           <Button
             variant={isEditing ? 'primary' : 'secondary'}
             size="sm"
-            onClick={() => setIsEditing(!isEditing)}
+            onClick={toggleEditing}
           >
             {isEditing ? (
               <>

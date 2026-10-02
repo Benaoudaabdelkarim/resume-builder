@@ -9,6 +9,59 @@ export default function MinimalTechTemplate({ resume, isEditing, onUpdate }) {
 
   const { personalInfo = {}, summary = '', skills = [], experience = [], education = [], projects = [] } = resume;
 
+  const handleSkillCategoryChange = (idx, value) => {
+    if (!onUpdate) return;
+    const updated = JSON.parse(JSON.stringify(resume));
+    if (!Array.isArray(updated.skills)) updated.skills = [];
+    if (updated.skills[idx]) {
+      updated.skills[idx].category = value;
+      onUpdate(updated);
+    }
+  };
+
+  const handleSkillItemsChange = (idx, value) => {
+    if (!onUpdate) return;
+    const updated = JSON.parse(JSON.stringify(resume));
+    if (!Array.isArray(updated.skills)) updated.skills = [];
+    if (updated.skills[idx]) {
+      updated.skills[idx].items = value;
+      onUpdate(updated);
+    }
+  };
+
+  const handleSkillItemsBlur = (idx) => {
+    if (!onUpdate) return;
+    const updated = JSON.parse(JSON.stringify(resume));
+    const raw = updated.skills?.[idx]?.items;
+    if (typeof raw === 'string') {
+      updated.skills[idx].items = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      onUpdate(updated);
+    }
+  };
+
+  const handleAddSkillCategory = () => {
+    if (!onUpdate) return;
+    const updated = JSON.parse(JSON.stringify(resume));
+    if (!Array.isArray(updated.skills)) updated.skills = [];
+    updated.skills.push({
+      category: 'New Category',
+      items: ['Skill 1', 'Skill 2'],
+    });
+    onUpdate(updated);
+  };
+
+  const handleRemoveSkillCategory = (idx) => {
+    if (!onUpdate) return;
+    const updated = JSON.parse(JSON.stringify(resume));
+    if (Array.isArray(updated.skills)) {
+      updated.skills.splice(idx, 1);
+      onUpdate(updated);
+    }
+  };
+
   const cleanText = (text) => {
     if (!text || typeof text !== 'string') return text;
     return text
@@ -77,26 +130,65 @@ export default function MinimalTechTemplate({ resume, isEditing, onUpdate }) {
         </section>
       )}
 
-      {/* Skills - Layout matching Image 2 */}
-      {skills && skills.length > 0 && (
+      {/* Core Competencies & Skills */}
+      {((skills && skills.length > 0) || isEditing) && (
         <section className="mb-6">
+          <h2 className="text-sm font-bold tracking-normal text-slate-900 mb-2">
+            Technical Skills & Competencies
+          </h2>
           <div className="space-y-3 text-sm">
             {skills.map((group, idx) => (
               <div key={idx} className="skill-group avoid-break flex flex-col">
-                {idx === 0 && (
-                  <h2 className="text-sm font-bold tracking-normal text-slate-900 mb-2">
-                    Technical Skills & Competencies
-                  </h2>
+                {isEditing ? (
+                  <div className="p-2.5 border border-indigo-200 rounded-md bg-indigo-50/20 mb-1 space-y-1.5 font-sans">
+                    <div className="flex items-center justify-between gap-2">
+                      <input
+                        type="text"
+                        className="w-full text-xs font-bold text-slate-900 border-b border-dashed border-indigo-400 focus:outline-none bg-transparent px-1 py-0.5"
+                        placeholder="Category Name (e.g. Languages & Frameworks)"
+                        value={group.category || ''}
+                        onChange={(e) => handleSkillCategoryChange(idx, e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkillCategory(idx)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs px-2 py-0.5 rounded transition-colors font-medium shrink-0"
+                        title="Delete category"
+                      >
+                        ✕ Remove
+                      </button>
+                    </div>
+                    <textarea
+                      rows={2}
+                      className="w-full text-xs text-slate-800 border border-indigo-200 rounded p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                      placeholder="Skills separated by commas (e.g. Python, Docker, Kubernetes)"
+                      value={Array.isArray(group.items) ? group.items.join(', ') : (group.items || '')}
+                      onChange={(e) => handleSkillItemsChange(idx, e.target.value)}
+                      onBlur={() => handleSkillItemsBlur(idx)}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <span className="font-bold text-slate-900">
+                      {group.category ? cleanText(group.category).replace(/:\s*$/, '') : 'Skills'}
+                    </span>
+                    <span className="text-slate-800 mt-0.5 leading-relaxed">
+                      {Array.isArray(group.items) ? group.items.map(cleanText).join(', ') : cleanText(group.items)}
+                    </span>
+                  </>
                 )}
-                <span className="font-bold text-slate-900">
-                  {group.category ? cleanText(group.category).replace(/:\s*$/, '') : 'Skills'}
-                </span>
-                <span className="text-slate-800 mt-0.5 leading-relaxed">
-                  {Array.isArray(group.items) ? group.items.map(cleanText).join(', ') : cleanText(group.items)}
-                </span>
               </div>
             ))}
           </div>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={handleAddSkillCategory}
+              className="mt-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 border border-dashed border-indigo-300 hover:border-indigo-500 rounded px-2.5 py-1 transition-colors bg-indigo-50/40"
+            >
+              + Add Skill Category
+            </button>
+          )}
         </section>
       )}
 
