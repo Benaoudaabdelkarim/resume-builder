@@ -160,15 +160,17 @@ h4 {
   .resume-paper {
     display: block !important;
     box-shadow: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    margin: 0 auto !important;
+    padding: 10mm 14mm !important;
+    box-sizing: border-box !important;
     width: 100% !important;
     min-height: auto !important;
     border: none !important;
+    background: #ffffff !important;
   }
 
   @page {
-    margin: 10mm;
+    margin: 0 !important;
     size: letter portrait;
   }
 

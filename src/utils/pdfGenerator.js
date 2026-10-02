@@ -97,7 +97,7 @@ export function triggerPrint(elementOrId, documentTitle = 'Document') {
         <style>
           @page {
             size: letter portrait;
-            margin: 10mm;
+            margin: 0 !important;
           }
           *, *::before, *::after {
             -webkit-print-color-adjust: exact !important;
@@ -113,11 +113,12 @@ export function triggerPrint(elementOrId, documentTitle = 'Document') {
           .isolated-print-wrapper {
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
+            margin: 0 auto !important;
+            padding: 10mm 14mm !important;
+            box-sizing: border-box !important;
             box-shadow: none !important;
             border: none !important;
-            background: transparent !important;
+            background: #ffffff !important;
           }
           .avoid-break, .skill-group, .experience-item, .education-item, .project-item, li, p, h1, h2, h3, h4 {
             page-break-inside: avoid !important;
