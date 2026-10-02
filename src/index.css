@@ -140,12 +140,22 @@ h4 {
 
 /* Print optimizations for crisp ATS PDFs */
 @media print {
-  header,
+  body > div > header,
   nav,
   aside,
   button,
   .no-print {
     display: none !important;
+  }
+
+  /* Ensure resume and cover letter headers remain fully visible */
+  #resume-document header,
+  #cover-letter-document header,
+  .resume-paper header,
+  .isolated-print-wrapper header {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 
   body {

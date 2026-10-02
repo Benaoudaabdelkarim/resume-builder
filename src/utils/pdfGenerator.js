@@ -124,6 +124,11 @@ export function triggerPrint(elementOrId, documentTitle = 'Document') {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
+          header, .resume-paper header, .isolated-print-wrapper header, #resume-document header {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+          }
         </style>
       </head>
       <body>
