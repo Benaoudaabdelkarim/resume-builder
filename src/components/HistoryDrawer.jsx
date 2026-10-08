@@ -126,10 +126,10 @@ export default function HistoryDrawer({ isOpen, onClose, onLoadApplication }) {
   return (
     <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()} direction="right">
       <DrawerContent
-        className={`transition-all duration-300 ${
+        className={`transition-all duration-300 w-full ${
           isExpanded
-            ? 'max-w-[96vw] sm:max-w-[95vw]'
-            : 'max-w-4xl sm:max-w-5xl'
+            ? 'max-w-[98vw]'
+            : 'max-w-[94vw] lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1550px]'
         }`}
       >
         {/* Drawer Header */}
@@ -211,13 +211,13 @@ export default function HistoryDrawer({ isOpen, onClose, onLoadApplication }) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[180px]">Company Name</TableHead>
-                    <TableHead className="w-[180px]">Position Name</TableHead>
-                    <TableHead className="w-[110px]">Min Rate</TableHead>
-                    <TableHead className="w-[110px]">Max Rate</TableHead>
-                    <TableHead className="w-[110px]">Rate Type</TableHead>
-                    <TableHead>Date / Assets</TableHead>
-                    <TableHead className="text-right w-[90px]">Action</TableHead>
+                    <TableHead className="min-w-[200px] w-[260px]">Company Name</TableHead>
+                    <TableHead className="min-w-[220px] w-[300px]">Position Name</TableHead>
+                    <TableHead className="w-[120px]">Min Rate</TableHead>
+                    <TableHead className="w-[120px]">Max Rate</TableHead>
+                    <TableHead className="w-[130px]">Rate Type</TableHead>
+                    <TableHead className="min-w-[180px]">Date / Assets</TableHead>
+                    <TableHead className="text-right w-[110px]">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

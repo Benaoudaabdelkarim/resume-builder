@@ -297,25 +297,16 @@ export async function saveApplicationBundle(bundleData = {}, userId = null) {
 }
 
 /**
- * List all saved applications for a user (including root applications directory and local user stores).
+ * List all saved applications for a user.
+ * Strictly scopes to the specified user's directory, or root applications if guest.
  */
 export function listApplications(userId = null) {
   const dirs = [];
   if (userId) {
     dirs.push(getUserApplicationsDir(userId));
+  } else {
+    dirs.push(APPLICATIONS_DIR);
   }
-  if (fs.existsSync(USERS_DIR)) {
-    try {
-      const userFolders = fs.readdirSync(USERS_DIR);
-      for (const u of userFolders) {
-        const uAppDir = path.join(USERS_DIR, u, 'applications');
-        if (fs.existsSync(uAppDir) && !dirs.includes(uAppDir)) {
-          dirs.push(uAppDir);
-        }
-      }
-    } catch {}
-  }
-  dirs.push(APPLICATIONS_DIR);
 
   const seenFolders = new Set();
   const list = [];
@@ -390,22 +381,7 @@ export function getApplication(folderName, userId = null) {
     if (fs.existsSync(userAppDir)) {
       targetDir = userAppDir;
     }
-  }
-
-  if (!targetDir && fs.existsSync(USERS_DIR)) {
-    try {
-      const userFolders = fs.readdirSync(USERS_DIR);
-      for (const u of userFolders) {
-        const candidate = path.join(USERS_DIR, u, 'applications', safeFolder);
-        if (fs.existsSync(candidate)) {
-          targetDir = candidate;
-          break;
-        }
-      }
-    } catch {}
-  }
-
-  if (!targetDir) {
+  } else {
     const rootAppDir = path.join(APPLICATIONS_DIR, safeFolder);
     if (fs.existsSync(rootAppDir)) {
       targetDir = rootAppDir;
@@ -460,18 +436,7 @@ export function getApplicationFilePath(folderName, fileName, userId = null) {
     if (fs.existsSync(userFilePath)) {
       return userFilePath;
     }
-  }
-
-  if (fs.existsSync(USERS_DIR)) {
-    try {
-      const userFolders = fs.readdirSync(USERS_DIR);
-      for (const u of userFolders) {
-        const candidate = path.join(USERS_DIR, u, 'applications', safeFolder, safeFile);
-        if (fs.existsSync(candidate)) {
-          return candidate;
-        }
-      }
-    } catch {}
+    return null;
   }
 
   const rootFilePath = path.join(APPLICATIONS_DIR, safeFolder, safeFile);
